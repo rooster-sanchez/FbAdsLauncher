@@ -1,0 +1,25 @@
+{
+  "airtable_base_id": "appXXXXXXXXXX",
+  "airtable_ad_sets_table_id": "tblXXXXXXXXXX",
+  "airtable_ads_table_id": "tblXXXXXXXXXX",
+  "fb_ad_account_id": "act_XXXXXXX",
+  "fb_page_id": "XXXXXXX",
+  "instagram_user_id": "XXXXXXX",
+  "default_pixel_id": "XXXXXXX",
+  "default_optimization_goal": "OFFSITE_CONVERSIONS",
+  "default_billing_event": "IMPRESSIONS",
+  "default_geo_locations": {
+    "countries": ["US"]
+  },
+  "naming_convention": {
+    "campaign": "{date}_{objective}_{geo}",
+    "ad_set": "{date}_{targeting}_{placement}",
+    "ad": "{date}_{creative_type}_{variant}"
+  },
+  "utm_defaults": {
+    "utm_source": "facebook",
+    "utm_medium": "paid",
+    "utm_campaign": "{{campaign.name}}",
+    "utm_content": "{{ad.name}}"
+  }
+}

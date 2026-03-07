@@ -1,0 +1,18 @@
+# Secrets
+.env
+clients/*/credentials/secrets.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# OS
+.DS_Store
+
+# Claude Code local state
+.claude/settings.local.json
+
+# Temp files from ad creative downloads
+/tmp_attachments/

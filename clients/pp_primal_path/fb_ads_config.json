@@ -1,0 +1,28 @@
+{
+  "fb_ad_account_id": "1385884178800701",
+  "fb_page_id": "339101236109342",
+  "instagram_user_id": "2375599915808204",
+  "default_pixel_id": "1404844763794632",
+  "default_optimization_goal": "OFFSITE_CONVERSIONS",
+  "default_billing_event": "IMPRESSIONS",
+  "default_geo_locations": {
+    "countries": [
+      "US"
+    ]
+  },
+  "naming_convention": {
+    "campaign": "{date}_{buying_type}_{phase}_{objective}_{geo}",
+    "adset": "{campaign_name}_{targeting_type}_{audience_label}",
+    "ad": "{ad_name}"
+  },
+  "utm_defaults": {
+    "utm_source": "facebook_ads",
+    "utm_medium": "paid",
+    "utm_campaign": "{{campaign.name}}",
+    "utm_content": "{{ad.name}}",
+    "utm_term": "{{adset.name}}"
+  },
+  "airtable_base_id": "appwnHj3VZGLQ4Tck",
+  "airtable_ad_sets_table_id": "tblcWSGbKsNO3cbnF",
+  "airtable_ads_table_id": "tblmzzZbq1N9kbSjg"
+}
