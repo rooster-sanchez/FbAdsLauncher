@@ -1,0 +1,51 @@
+# The Happy Hustle — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# Main campaign: ABO Sales with Flexible Ads
+default_campaign_keyword: "MMS | ABO | SALES | FLEXIBLE ADS"
+default_adset_keyword: "MMS | ABO | SALES | BROAD | FLEXIBLE ADS"
+
+# ─── Budget ───
+default_daily_budget: 100  # USD per ad set (adjust if user specifies)
+
+# ─── Audience & Targeting ───
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+
+# ─── Optimization ───
+default_optimization_goal: OFFSITE_CONVERSIONS
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+attribution_setting: 7d_click
+
+# ─── Products ───
+products:
+  - name: The Happy Hustle
+    type: course/coaching
+    status: active
+
+# ─── Ad Copy Strategy ───
+# Default: 2 top-performing primary texts + 2 headlines from last 30 days.
+# IMPORTANT: Performance is measured by "Per invitee_meeting_scheduled" objective,
+# NOT by purchase or standard conversion metrics.
+ad_copy_strategy: top_performing_last_30d
+ad_copy_count:
+  primary_text: 2
+  headlines: 2
+ad_copy_performance_metric: per_invitee_meeting_scheduled
+
+# ─── Creative Handling ───
+# Default: Flexible ads (all images inside one ad).
+# This means multiple images/videos are uploaded as a single Flexible ad unit
+# where Meta optimizes which creative to show.
+default_creative_type: flexible
+default_cta: LEARN_MORE
+
+# ─── Client-Specific Notes ───
+# - Performance optimization is on meeting scheduled (Calendly/booking), not purchase
+# - When pulling top-performing copy, sort by "Per invitee_meeting_scheduled" cost
+# - Flexible ads = all creatives bundled into one ad, not separate ads per image

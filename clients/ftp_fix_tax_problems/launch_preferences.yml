@@ -1,0 +1,59 @@
+# Fix Tax Problems — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# Messenger campaign — user says "upload to Messenger" or similar.
+# Main campaign uses CBO with Messenger objective.
+default_campaign_keyword: "MMS | SALES OBJECTIVE | CBO (MESSENGER)"
+default_adset_keyword: "MMS | BROAD | US | 25-65+ | SALES OBJECTIVE | MESSENGER"
+
+# ─── Budget ───
+# CBO campaign — budget is set at campaign level, not ad set level.
+# No default_daily_budget since CBO manages distribution.
+
+# ─── Audience & Targeting ───
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+default_age_range:
+  min: 25
+  max: 65  # 65+ in Meta
+
+# ─── Optimization ───
+# Messenger/Sales objective — destination is Messenger.
+default_optimization_goal: OFFSITE_CONVERSIONS
+default_billing_event: IMPRESSIONS
+destination_type: MESSENGER
+
+# ─── Attribution ───
+attribution_setting: 7d_click
+
+# ─── Products ───
+products:
+  - name: Fix Tax Problems
+    type: service
+    status: active
+
+# ─── Ad Copy Strategy ───
+# Default: 3 top-performing primary texts + 3 headlines from last 30 days.
+ad_copy_strategy: top_performing_last_30d
+ad_copy_count:
+  primary_text: 3
+  headlines: 3
+
+# ─── Creative Handling ───
+# Messenger ads use a chat builder template.
+default_creative_type: single_image
+default_cta: MESSAGE_PAGE  # "Send Message"
+
+# ─── Messenger-Specific ───
+# Chat builder template: "MMS - USE THIS"
+# When creating ads, select this template in the Messenger destination setup.
+chat_template_name: "MMS - USE THIS"
+
+# ─── Client-Specific Notes ───
+# - No Instagram configured (Facebook/Messenger only)
+# - This is a Messenger destination campaign — ads open a Messenger conversation
+# - CBO campaign: budget is managed at the campaign level
+# - Age targeting: 25-65+ (narrower than default)

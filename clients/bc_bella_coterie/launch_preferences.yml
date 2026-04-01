@@ -1,0 +1,52 @@
+# Bella Coterie — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# ASC+ campaign with bid cap.
+default_campaign_keyword: "ASC+ | Bid Cap | Sales Campaign"
+
+# ─── Budget ───
+default_daily_budget: 200  # USD per ad set
+
+# ─── Audience & Targeting ───
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+
+standard_exclusions:
+  - type: custom_audience
+    label: "Past purchasers"
+    note: "Exclude past purchasers — find exact audience ID from existing ad sets in the account"
+
+# ─── Optimization ───
+default_optimization_goal: OFFSITE_CONVERSIONS
+default_conversion_event: PURCHASE
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+attribution_setting: 7d_click
+
+# ─── Products ───
+products:
+  - name: "4-Piece Bamboo Sheet Set"
+    variant: "Color: Dune"
+    url: "https://bellacoterie.com/products/bella-coterie-luxury-queen-size-bamboo-sheet-set-organically-grown-ultra-soft-cooling-for-hot-sleepers-18-deep-pocket-viscose-made-from-bamboo-black"
+    status: active
+
+# ─── Ad Copy Strategy ───
+# Default: 3 top-performing primary texts + 3 headlines from last 30 days.
+ad_copy_strategy: top_performing_last_30d
+ad_copy_count:
+  primary_text: 3
+  headlines: 3
+
+# ─── Creative Handling ───
+default_creative_type: single_image
+default_cta: SHOP_NOW
+
+# ─── Client-Specific Notes ───
+# - No Instagram configured (Facebook only — intentional)
+# - ASC+ (Advantage Shopping Campaign+) with bid cap
+# - E-commerce brand — CTA is Shop Now
+# - Product URLs point to bellacoterie.com Shopify store
