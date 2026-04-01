@@ -13,6 +13,7 @@ Usage:
 """
 
 import os
+import re
 import time
 from datetime import datetime
 
@@ -53,6 +54,19 @@ def _patch_record(base_id: str, table_id: str, record_id: str,
             f"Airtable PATCH {record_id} failed [{resp.status_code}]: {resp.text[:300]}"
         )
     return resp.json()
+
+
+def _parse_exclusion_audiences(selections: list) -> list[str]:
+    """Parse audience IDs from multipleSelects values like 'Audience Name (123456789)'.
+
+    Returns a list of Meta audience ID strings.
+    """
+    ids = []
+    for selection in selections:
+        match = re.search(r'\((\d+)\)$', str(selection).strip())
+        if match:
+            ids.append(match.group(1))
+    return ids
 
 
 def _clean_text(text: str) -> str:
@@ -99,7 +113,9 @@ def get_batch_brief(record_id: str, config: dict) -> dict:
         "targeting": (f.get("7. Targeting Type") or f.get("6. Targeting Type") or f.get("Targeting Type") or "Broad").lower(),
         "age_range": f.get("8. Age Range") or f.get("7. Age Range") or f.get("Age Range", "") or "",
         "gender": (f.get("9. Gender") or f.get("8. Gender") or f.get("Gender") or "All").lower(),
-        "custom_audience_ids": f.get("10. Custom Audience IDs") or f.get("9. Custom Audience IDs") or f.get("Custom Audience IDs", "") or "",
+        "custom_audience_ids": _parse_exclusion_audiences(
+            f.get("10. Custom Audiences") or f.get("Custom Audiences") or []
+        ) or f.get("10. Custom Audience IDs") or f.get("9. Custom Audience IDs") or f.get("Custom Audience IDs", "") or "",
         "interest_keywords": f.get("11. Interest Keywords") or f.get("10. Interest Keywords") or f.get("Interest Keywords", "") or "",
         "destination_url": f.get("12. Destination URL") or f.get("11. Destination URL") or f.get("Destination URL", "") or "",
         "cta": f.get("13. CTA") or f.get("12. CTA") or f.get("CTA", "LEARN_MORE") or "LEARN_MORE",
@@ -107,6 +123,12 @@ def get_batch_brief(record_id: str, config: dict) -> dict:
         "existing_ad_set_name": f.get("5. Existing Ad Set Name") or f.get("Existing Ad Set Name") or "",
         "adset_name": f.get("4. Ad Set Name") or f.get("Ad Set Name") or "",
         "launch_date": f.get("16. Launch Date") or f.get("Launch Date", "") or "",
+        "exclusion_audiences": _parse_exclusion_audiences(
+            f.get("17. Exclusion Audiences") or f.get("Exclusion Audiences") or []
+        ),
+        # Idempotency fields — used to detect already-launched records
+        "_status": f.get("15. Status") or f.get("Status", ""),
+        "_meta_campaign_id": f.get("Meta Campaign ID", ""),
     }
 
     # 3. Read each linked Ad record

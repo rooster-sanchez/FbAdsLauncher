@@ -1,7 +1,7 @@
 {
   "fb_ad_account_id": "173018886540215",
   "fb_page_id": "204427493437265",
-  "instagram_user_id": "1929064827167228",
+  "instagram_user_id": "",
   "default_pixel_id": "429442854063772",
   "default_optimization_goal": "OFFSITE_CONVERSIONS",
   "default_billing_event": "IMPRESSIONS",
@@ -22,7 +22,7 @@
     "utm_content": "{{ad.name}}",
     "utm_term": "{{adset.name}}"
   },
-  "airtable_base_id": "appuSYORbuR0iF4K2",
+  "airtable_base_id": "applw6A1Rl6OkACKR",
   "airtable_ad_sets_table_id": "tblcWSGbKsNO3cbnF",
   "airtable_ads_table_id": "tblmzzZbq1N9kbSjg"
 }

@@ -64,6 +64,10 @@ def _build_base_targeting(config: dict, batch_fields: dict) -> dict:
     if genders != [0]:
         targeting["genders"] = genders
 
+    # Exclusion audiences are passed separately via excluded_custom_audiences
+    # (Meta deprecated targeting.exclusions.custom_audiences in API v21.0+)
+    # See meta_api.create_adset() for how they're sent as a top-level param.
+
     return targeting
 
 
@@ -75,22 +79,26 @@ def _build_broad_targeting(config: dict, batch_fields: dict) -> dict:
 def _build_lookalike_targeting(config: dict, batch_fields: dict) -> dict:
     """Lookalike targeting: base + custom audience IDs.
 
-    Reads audience IDs from the 'custom_audience_ids' batch field
-    (comma-separated list of Meta audience IDs).
+    Reads audience IDs from the 'custom_audience_ids' batch field.
+    Accepts either a list of IDs (from multi-select dropdown) or a
+    comma-separated string (legacy text field).
     """
     targeting = _build_base_targeting(config, batch_fields)
 
     audience_ids_raw = batch_fields.get("custom_audience_ids", "")
     if not audience_ids_raw:
         print("  Warning: Lookalike targeting selected but no custom_audience_ids provided")
-        print("  Run list_custom_audiences.py to find audience IDs")
+        print("  Select audiences from the '10. Custom Audiences' dropdown")
         return targeting
 
-    # Parse comma-separated IDs
-    audience_ids = [
-        aid.strip() for aid in str(audience_ids_raw).split(",")
-        if aid.strip()
-    ]
+    # Accept list (from multi-select) or comma-separated string (legacy text field)
+    if isinstance(audience_ids_raw, list):
+        audience_ids = [aid.strip() for aid in audience_ids_raw if aid.strip()]
+    else:
+        audience_ids = [
+            aid.strip() for aid in str(audience_ids_raw).split(",")
+            if aid.strip()
+        ]
 
     if audience_ids:
         targeting["custom_audiences"] = [{"id": aid} for aid in audience_ids]

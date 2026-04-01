@@ -1,0 +1,77 @@
+# Primal Path — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# Two campaigns:
+#   - Sales: "ABO PP Sales" — user says "sales campaign"
+#   - Lead Gen: "PP ABO Lead Gen" — user says "lead campaign"
+# Match by looking at existing campaigns in the ad account.
+campaigns:
+  sales: "ABO PP Sales"
+  lead_gen: "PP ABO Lead Gen"
+
+# ─── Budget ───
+default_daily_budget: 100  # USD per ad set
+
+# ─── Audience & Targeting ───
+# User will specify one of: broad, lookalike, or interest.
+# Exclusions are universal across all audience types.
+default_audience_type: broad  # unless user specifies LAL or interest
+default_geo_locations:
+  countries:
+    - US
+
+standard_exclusions:
+  - type: custom_audience
+    id: "120228275154410227"
+    label: "PP Customers - Updated August 7th 2025"
+  - type: custom_audience
+    id: "120236483701190227"
+    label: "PRIMAL PATH - CUSTOMER LIST - UPDATED FEB 2026"
+# Exclusions apply regardless of audience type (broad, LAL, or interest).
+
+# ─── Optimization ───
+default_optimization_goal: OFFSITE_CONVERSIONS  # Sales
+default_conversion_event: PURCHASE
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+# IMPORTANT: Always use 7-day click attribution unless told otherwise.
+attribution_setting: 7d_click
+
+# ─── Products ───
+# Single product: Primal Path course. No product disambiguation needed.
+products:
+  - name: Primal Path
+    type: course
+    status: active
+
+# ─── Ad Copy Strategy ───
+# Default: pull top-performing headline + primary text from the last 30 days.
+# Override: user provides specific ad copy.
+ad_copy_strategy: top_performing_last_30d
+
+# ─── Creative Handling ───
+# User will specify: carousel, single image, flex ads, multi-format.
+# Default: single image ads unless told otherwise.
+default_creative_type: single_image
+default_cta: LEARN_MORE
+
+# ─── Naming Convention ───
+# Already defined in fb_ads_config.json:
+#   campaign: {date}_{buying_type}_{phase}_{objective}_{geo}
+#   adset:    {campaign_name}_{targeting_type}_{audience_label}
+#   ad:       {ad_name}
+
+# ─── Client-Specific Notes ───
+# IMPORTANT: This ad account (1385884178800701) is shared with Forming Men and
+# Resilient Daughters. There are 5 pixels on the account:
+#   - Forming Men's Pixel (1987623968751500)
+#   - Man Year's Pixel (4456328524599542)
+#   - Primal Path DM Pixel (321606713264525) ← NOT this one
+#   - PRIMAL PATH's Pixel (1404844763794632) ← USE THIS ONE
+#   - Resilient Daughters' Pixel (877075395001496)
+#
+# Always use "Primal Path DM Pixel" (321606713264525) for Primal Path launches.
+# The fb_ads_config.json has the wrong pixel (1404844763794632).
+primal_path_pixel_id: "1404844763794632"

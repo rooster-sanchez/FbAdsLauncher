@@ -1,5 +1,14 @@
 # FB Ads Launcher
 
+## Self-Healing Rules
+
+Every time we fix a bug, resolve an error, or discover a non-obvious behavior:
+1. Read `LESSONS.md` first to check for existing lessons
+2. Add the new lesson to `LESSONS.md` (format: what went wrong → what to do instead)
+3. If a lesson exists but was insufficient, strengthen it
+
+---
+
 Autonomous agent that reads Airtable Ad Set briefs and launches Facebook/Meta ads via the Marketing API. Triggered automatically when an Airtable Ad Set status changes to "Ready to Launch".
 
 ## How It Works
@@ -105,10 +114,25 @@ python3 scripts/sync_bases.py --apply  # Apply to all client bases
 - Use `--dry-run` to preview everything before creating
 - NEVER delete existing campaigns/ad sets/ads without explicit user approval
 
-## Meta Marketing API (v21.0) Gotchas
+## Debugging Launches
 
-- Campaign creation requires `is_adset_budget_sharing_enabled: false` for ABO campaigns
-- Ad set creation requires `bid_strategy: LOWEST_COST_WITHOUT_CAP` and `targeting_automation: {advantage_audience: 0}` in targeting spec
-- Video ad creatives require a thumbnail (`image_url` in `video_data`) — fetch via `GET /{video_id}/thumbnails`
-- Use `instagram_user_id` (not `instagram_actor_id`) in `object_story_spec` — get the correct ID from `GET /{page_id}?fields=instagram_business_account`
-- `special_ad_categories` must be sent as string `"[]"` not empty array
+When the user asks to debug/fix a launch error, you can trigger launches manually instead of requiring them to click "Ready to Launch" in Airtable:
+
+```bash
+# Run the launch directly (same as what Modal webhook does)
+python3 scripts/main.py <client_slug> <record_id>
+
+# With dry run first to inspect payload
+python3 scripts/main.py <client_slug> <record_id> --dry-run
+```
+
+**Workflow for iterative debugging:**
+1. Fix the code
+2. Deploy: `python3 -m modal deploy scripts/modal_webhook.py`
+3. Run locally: `python3 scripts/main.py <slug> <record_id>`
+4. If it fails, fix and repeat from step 1
+5. No need for the user to re-trigger from Airtable each time
+
+## Meta Marketing API (v25.0) Gotchas
+
+See `LESSONS.md` for the full list — kept external to avoid bloating this file.

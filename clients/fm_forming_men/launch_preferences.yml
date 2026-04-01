@@ -1,0 +1,93 @@
+# Forming Men — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# Two campaigns:
+#   - Consumer: points to manyear.co — user says "consumer campaign"
+#   - Churches: points to manyear.co/churches — user says "churches campaign"
+# User will specify which one. Optimization goal (leads vs sales) varies — user will indicate.
+campaigns:
+  consumer: "Consumer"
+  churches: "Churches"
+
+# ─── Budget ───
+default_daily_budget: 100  # USD per ad set, unless told otherwise
+
+# ─── Audience & Targeting ───
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+
+# Consumer campaign exclusions (from Feb 2026 ad set — most recent with exclusions):
+consumer_exclusions:
+  - id: "120203592947180227"
+    label: "SUBSCRIBED_PRIMAL PATH_34K_JAN24.csv"
+  - id: "120203623894050227"
+    label: "ALL CONTACTS 32K PRIMAL PATH.csv"
+  - id: "120205970157640227"
+    label: "SUBSCRIBED_PRIMAL PATH_MARCH2024_39537.csv"
+  - id: "120206721871680227"
+    label: "KJ - TPP - PP - Customers.csv"
+  - id: "120210857166950227"
+    label: "MMS - RET - Kajabi Resilient Daughters Customers"
+  - id: "120211516295310227"
+    label: "MMS RET Forming Men + Fighting Shadows Customers"
+  - id: "120211516301100227"
+    label: "MMS RET Primal Path Customers - Sept 2024 Kajabi"
+  - id: "120211516335610227"
+    label: "MMS RET PP:60 Pixel"
+  - id: "120212343797880227"
+    label: "MMS - TPP - RET PP:180"
+  - id: "120214260739690227"
+    label: "KJ-RD-PP-Customers"
+  - id: "120228230959160227"
+    label: "Man Year - Customer List - Updated August 6th 2025"
+
+# Churches campaign: no exclusions on current live ad sets.
+churches_exclusions: []
+
+# ─── Optimization ───
+# VARIES per campaign — user will specify leads or sales for each launch.
+# No hard default; ask if not specified.
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+# IMPORTANT: Always use 7-day click attribution unless told otherwise.
+attribution_setting: 7d_click
+
+# ─── Products ───
+products:
+  - name: Man Year (Consumer)
+    url: manyear.co
+    campaign: consumer
+  - name: Man Year Churches
+    url: manyear.co/churches
+    campaign: churches
+
+# ─── Ad Copy Strategy ───
+# Default: pull top-performing headline + primary text from the last 30 days.
+# Override: user provides specific ad copy.
+ad_copy_strategy: top_performing_last_30d
+
+# ─── Creative Handling ───
+# User will specify: carousel, single image, flex ads, multi-format.
+# Default: single image ads unless told otherwise.
+default_creative_type: single_image
+default_cta: LEARN_MORE
+
+# ─── Naming Convention ───
+# Already defined in fb_ads_config.json:
+#   campaign: {date}_{buying_type}_{phase}_{objective}_{geo}
+#   adset:    {campaign_name}_{targeting_type}_{audience_label}
+#   ad:       {ad_name}
+
+# ─── Client-Specific Notes ───
+# IMPORTANT: Shared ad account (1385884178800701) with Primal Path and Resilient Daughters.
+# 5 pixels on account — ALWAYS use Man Year's Pixel for Forming Men launches:
+#   - Forming Men's Pixel (1987623968751500) ← NOT this one
+#   - Man Year's Pixel (4456328524599542) ← USE THIS ONE
+#   - Primal Path DM Pixel (321606713264525)
+#   - PRIMAL PATH's Pixel (1404844763794632)
+#   - Resilient Daughters' Pixel (877075395001496)
+man_year_pixel_id: "4456328524599542"

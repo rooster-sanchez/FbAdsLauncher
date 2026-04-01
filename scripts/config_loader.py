@@ -79,7 +79,11 @@ def load_all(client_slug: str) -> dict:
 
 
 def validate_config(config: dict) -> list[str]:
-    """Return a list of error messages. Empty list means valid."""
+    """Return a list of error messages. Empty list means valid.
+
+    Checks required fields and warns about optional-but-recommended fields.
+    Warnings are printed but not included in the returned error list.
+    """
     errors = []
     if not config["fb_access_token"]:
         errors.append("FB_ACCESS_TOKEN is missing from .env")
@@ -89,8 +93,20 @@ def validate_config(config: dict) -> list[str]:
         errors.append("AIRTABLE_API_KEY is missing from .env")
     if not config["airtable_base_id"]:
         errors.append("airtable_base_id is missing from fb_ads_config.json")
+    if not config.get("airtable_ad_sets_table_id"):
+        errors.append("airtable_ad_sets_table_id is missing from fb_ads_config.json")
+    if not config.get("airtable_ads_table_id"):
+        errors.append("airtable_ads_table_id is missing from fb_ads_config.json")
     if not config["fb_page_id"]:
         errors.append("fb_page_id is missing from fb_ads_config.json")
+
+    # Warnings (not blocking, but printed)
+    if not config.get("instagram_user_id"):
+        print("  [WARN] instagram_user_id is empty — ads will be Facebook-only (can be auto-resolved)")
+    opt_goal = config.get("default_optimization_goal", "")
+    if "CONVERSION" in opt_goal.upper() and not config.get("default_pixel_id"):
+        print("  [WARN] default_pixel_id is empty but optimization goal is CONVERSIONS — tracking may not work")
+
     return errors
 
 

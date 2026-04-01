@@ -31,15 +31,18 @@ import modal
 
 app = modal.App("fb-ads-launcher")
 
+LAUNCHER_VERSION = "2026-03-13-v8"
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("requests", "python-dotenv", "fastapi")
+    .env({"LAUNCHER_VERSION": LAUNCHER_VERSION})
     .add_local_dir(
-        "/Users/luisfersang/Documents/Antigravity/agents/fb-ads-launcher/scripts",
+        "/Users/luisfersang/Documents/Rooster's AI Projects/FbAdsLauncher/scripts",
         remote_path="/app/scripts",
     )
     .add_local_dir(
-        "/Users/luisfersang/Documents/Antigravity/clients",
+        "/Users/luisfersang/Documents/Rooster's AI Projects/FbAdsLauncher/clients",
         remote_path="/app/clients",
     )
 )
@@ -61,7 +64,7 @@ def webhook(body: dict):
     record_id = body.get("record_id", "")
     client_slug = body.get("client_slug", "")
 
-    print(f"Webhook received: record_id={record_id}, client_slug={client_slug}")
+    print(f"Webhook received: record_id={record_id}, client_slug={client_slug} [version={LAUNCHER_VERSION}]")
 
     if not record_id:
         return {"status": "error", "reason": "no record_id in payload"}
@@ -76,8 +79,8 @@ def webhook(body: dict):
     os.environ.setdefault("FB_ADS_CLIENTS_DIR", "/app/clients")
 
     try:
-        from main import run_launcher
-        summary = run_launcher(client_slug, record_id, dry_run=False)
+        from error_agent import run_with_self_healing
+        summary = run_with_self_healing(client_slug, record_id, dry_run=False)
 
         return {
             "status": "success",
@@ -89,8 +92,80 @@ def webhook(body: dict):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"ERROR: {e}")
+        print(f"ERROR (after self-healing attempts): {e}")
+
+        # error_agent already sends detailed Slack notifications,
+        # but send a final fallback notification just in case
+        slack_url = os.environ.get("SLACK_WEBHOOK_URL", "")
+        if slack_url:
+            try:
+                from notifier import notify_launch_error
+                notify_launch_error(
+                    slack_url,
+                    client_slug=client_slug,
+                    error=f"[v{LAUNCHER_VERSION}] {e}",
+                    record_id=record_id,
+                )
+            except Exception:
+                print("Warning: Slack error notification failed")
+
         return {"status": "error", "reason": str(e)}
+
+
+# ─── Health Check Endpoint ───────────────────────────────────────────────────
+
+@app.function(image=image, secrets=secrets, timeout=120)
+@modal.fastapi_endpoint(method="GET")
+def health(client_slug: str = ""):
+    """Run pre-flight checks for one or all clients.
+
+    GET /health              → check all clients
+    GET /health?client_slug=ts_twelve_south → check one client
+    """
+    sys.path.insert(0, "/app/scripts")
+    os.environ.setdefault("FB_ADS_CLIENTS_DIR", "/app/clients")
+
+    from config_loader import load_all, validate_config
+    from preflight import resolve_instagram, run_preflight
+
+    from pathlib import Path
+    clients_dir = Path(os.environ.get("FB_ADS_CLIENTS_DIR", "/app/clients"))
+
+    # Determine which clients to check
+    if client_slug:
+        slugs = [client_slug]
+    else:
+        slugs = sorted([
+            d.name for d in clients_dir.iterdir()
+            if d.is_dir() and not d.name.startswith("_") and (d / "fb_ads_config.json").exists()
+        ])
+
+    results = {}
+    for slug in slugs:
+        try:
+            config = load_all(slug)
+            config_errors = validate_config(config)
+            if config_errors:
+                results[slug] = {"status": "config_error", "errors": config_errors}
+                continue
+
+            resolve_instagram(config)
+            preflight_errors = run_preflight(config)
+            if preflight_errors:
+                results[slug] = {"status": "unhealthy", "errors": preflight_errors}
+            else:
+                results[slug] = {"status": "healthy"}
+        except Exception as e:
+            results[slug] = {"status": "error", "errors": [str(e)]}
+
+    healthy = sum(1 for r in results.values() if r["status"] == "healthy")
+    total = len(results)
+
+    return {
+        "summary": f"{healthy}/{total} clients healthy",
+        "version": LAUNCHER_VERSION,
+        "clients": results,
+    }
 
 
 # ─── Local Entrypoint (for testing) ──────────────────────────────────────────

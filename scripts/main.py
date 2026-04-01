@@ -42,11 +42,16 @@ from meta_api import (
     create_adset,
     create_campaign,
     detect_media_type,
+    enable_dynamic_creative,
+    restrict_adset_to_facebook,
     search_adsets,
     search_campaigns,
     upload_image,
     upload_video,
+    delete_object,
 )
+from preflight import resolve_instagram, run_preflight
+from sync_meta_names import sync_client as sync_meta_dropdowns
 from targeting import build_targeting_spec
 
 # Will be available after notifier.py is built
@@ -78,11 +83,14 @@ def validate_brief(brief: dict, batch_fields: dict, dry_run: bool = False) -> li
     if not batch_fields.get("destination_url"):
         errors.append("Missing 'destination_url' field on parent task")
 
-    budget = batch_fields.get("daily_budget")
-    if budget is None:
-        errors.append("Missing 'daily_budget' field on parent task")
-    elif isinstance(budget, (int, float)) and budget <= 0:
-        errors.append(f"Daily budget must be positive, got: {budget}")
+    # Budget is only required when creating a new ad set
+    # (existing ad sets already have budget set, and CBO campaigns manage budget at campaign level)
+    if adset_mode.lower() != "existing":
+        budget = batch_fields.get("daily_budget")
+        if budget is None:
+            errors.append("Missing 'daily_budget' field on parent task")
+        elif isinstance(budget, (int, float)) and budget <= 0:
+            errors.append(f"Daily budget must be positive, got: {budget}")
 
     if not brief.get("ads"):
         errors.append("No subtasks (ads) found on the parent task")
@@ -113,14 +121,14 @@ def validate_brief(brief: dict, batch_fields: dict, dry_run: bool = False) -> li
     return errors
 
 
-def find_or_create_campaign(config: dict, batch_fields: dict, dry_run: bool) -> tuple[str, str]:
+def find_or_create_campaign(config: dict, batch_fields: dict, dry_run: bool) -> tuple[str, str, bool]:
     """Find an existing campaign or create a new one.
 
     Campaign field is a dropdown: 'New' or 'Existing'.
     When 'Existing', uses 'existing_campaign_name' text field to find it.
     When 'New', generates name from naming convention.
 
-    Returns (campaign_id, campaign_name).
+    Returns (campaign_id, campaign_name, is_new).
     """
     campaign_mode = str(batch_fields.get("campaign", "New")).strip()
     existing_name = str(batch_fields.get("existing_campaign_name", "") or "").strip()
@@ -136,13 +144,13 @@ def find_or_create_campaign(config: dict, batch_fields: dict, dry_run: bool) -> 
         for camp in existing:
             if camp["name"].lower() == existing_name.lower():
                 print(f"  Found (exact): {camp['name']} (ID: {camp['id']})")
-                return camp["id"], camp["name"]
+                return camp["id"], camp["name"], False
 
         # If only one partial match, use it
         if len(existing) == 1:
             camp = existing[0]
             print(f"  Found (partial match): {camp['name']} (ID: {camp['id']})")
-            return camp["id"], camp["name"]
+            return camp["id"], camp["name"], False
 
         if existing:
             names = [c["name"] for c in existing]
@@ -171,20 +179,22 @@ def find_or_create_campaign(config: dict, batch_fields: dict, dry_run: bool) -> 
 
     if dry_run:
         print(f"  [DRY RUN] Would create campaign: {campaign_name}")
-        return "DRY_RUN_CAMPAIGN_ID", campaign_name
+        return "DRY_RUN_CAMPAIGN_ID", campaign_name, True
 
     campaign_id = create_campaign(config, campaign_name)
-    return campaign_id, campaign_name
+    return campaign_id, campaign_name, True
 
 
 def find_or_create_adset(config: dict, campaign_id: str, batch_fields: dict,
                          targeting_spec: dict, dry_run: bool,
-                         is_dynamic_creative: bool = False) -> str:
+                         is_dynamic_creative: bool = False) -> tuple[str, bool]:
     """Find an existing ad set or create a new one.
 
     Ad Set field is a dropdown: 'New' or 'Existing'.
     When 'Existing', uses 'existing_ad_set_name' text field to find it.
     When 'New', generates name from targeting + naming convention.
+
+    Returns (adset_id, is_new).
     """
     adset_mode = str(batch_fields.get("ad_set", "New")).strip()
     existing_name = str(batch_fields.get("existing_ad_set_name", "") or "").strip()
@@ -196,24 +206,37 @@ def find_or_create_adset(config: dict, campaign_id: str, batch_fields: dict,
         print(f"\n  Looking for existing ad set: '{existing_name}'")
         existing = search_adsets(config, campaign_id, existing_name)
 
+        adset_id = None
         for adset in existing:
             if adset["name"].lower() == existing_name.lower():
                 print(f"  Found (exact): {adset['name']} (ID: {adset['id']})")
-                return adset["id"]
+                adset_id = adset["id"]
+                break
 
-        if len(existing) == 1:
+        if not adset_id and len(existing) == 1:
             adset = existing[0]
             print(f"  Found (partial match): {adset['name']} (ID: {adset['id']})")
-            return adset["id"]
+            adset_id = adset["id"]
 
-        if existing:
-            names = [a["name"] for a in existing]
-            raise ValueError(
-                f"Multiple ad sets contain '{existing_name}': {names}. "
-                f"Use a more specific name."
-            )
+        if not adset_id:
+            if existing:
+                names = [a["name"] for a in existing]
+                raise ValueError(
+                    f"Multiple ad sets contain '{existing_name}': {names}. "
+                    f"Use a more specific name."
+                )
+            raise ValueError(f"Ad set '{existing_name}' not found in campaign. Check the name and try again.")
 
-        raise ValueError(f"Ad set '{existing_name}' not found in campaign. Check the name and try again.")
+        # If no Instagram account is configured, restrict existing ad set to Facebook-only
+        # so creatives don't require an instagram_user_id
+        if not config.get("instagram_user_id") and not dry_run:
+            restrict_adset_to_facebook(config, adset_id)
+
+        # Enable dynamic creative on existing ad set if Flexible ads will be added
+        if is_dynamic_creative and not dry_run:
+            enable_dynamic_creative(config, adset_id)
+
+        return adset_id, False
 
     # Mode is "New" — use ad set name from brief, otherwise generate from convention
     adset_name_from_brief = str(batch_fields.get("adset_name", "") or "").strip()
@@ -247,9 +270,18 @@ def find_or_create_adset(config: dict, campaign_id: str, batch_fields: dict,
     launch_date = str(batch_fields.get("launch_date", "") or "").strip()
 
     # Convert Airtable date (YYYY-MM-DD) to Meta start_time (ISO 8601 with midnight)
+    # Skip start_time if the date is today or in the past (Meta rejects past start times)
     start_time = ""
     if launch_date:
-        start_time = f"{launch_date}T00:00:00-0500"
+        from datetime import date
+        try:
+            launch = date.fromisoformat(launch_date)
+            if launch > date.today():
+                start_time = f"{launch_date}T00:00:00-0500"
+            else:
+                print(f"  Launch date {launch_date} is today or past — skipping start_time (ad set starts immediately)")
+        except ValueError:
+            print(f"  Warning: Could not parse launch_date '{launch_date}', skipping start_time")
 
     if dry_run:
         print(f"  [DRY RUN] Would create ad set: {adset_name} (${daily_budget}/day)")
@@ -258,9 +290,13 @@ def find_or_create_adset(config: dict, campaign_id: str, batch_fields: dict,
             print(f"  [DRY RUN] Attribution window: {attribution_window}")
         if start_time:
             print(f"  [DRY RUN] Start time: {start_time}")
-        return "DRY_RUN_ADSET_ID"
+        return "DRY_RUN_ADSET_ID", True
 
-    return create_adset(
+    exclusion_ids = batch_fields.get("exclusion_audiences", [])
+    if exclusion_ids:
+        print(f"  Excluding {len(exclusion_ids)} audience(s): {exclusion_ids}")
+
+    adset_id = create_adset(
         config,
         campaign_id=campaign_id,
         name=adset_name,
@@ -269,7 +305,9 @@ def find_or_create_adset(config: dict, campaign_id: str, batch_fields: dict,
         is_dynamic_creative=is_dynamic_creative,
         attribution_window=attribution_window,
         start_time=start_time,
+        exclusion_audience_ids=exclusion_ids or None,
     )
+    return adset_id, True
 
 
 def _download_and_upload(config: dict, attachment: dict, download_dir: str) -> dict:
@@ -339,6 +377,7 @@ def _process_multi_placement_ad(config, adset_id, ad_name, attachments, headline
     Uses Placement Asset Customization (PAC) via asset_feed_spec + asset_customization_rules.
     Works on standard (non-dynamic) ad sets — multiple ads per ad set OK.
     Attachment order: [0]=Feed (1:1/4:5), [1]=Stories/Reels (9:16), [2]=Other.
+
     """
     print(f"    Format: Multi-Placement ({len(attachments)} sizes)")
 
@@ -472,10 +511,14 @@ def _process_flex_ad(config: dict, adset_id: str, all_ads: list[dict],
 
 
 def process_ad(config: dict, adset_id: str, ad_data: dict, batch_fields: dict,
-               download_dir: str, dry_run: bool, url_tags: str = "") -> dict:
+               download_dir: str, dry_run: bool, url_tags: str = "",
+               force_pac: bool = False) -> dict:
     """Process a single ad: download creative, upload to Meta, create ad.
 
     Routes to format-specific handler based on Ad Format field.
+    When force_pac=True, Single Image/Video ads are auto-promoted to PAC format
+    (same image used for all placements) so they can coexist with Multi-Placement
+    ads in the same ad set.
     Returns dict with created object IDs.
     """
     ad_name = ad_data["ad_name"]
@@ -489,7 +532,11 @@ def process_ad(config: dict, adset_id: str, ad_data: dict, batch_fields: dict,
     destination_url = batch_fields.get("destination_url", "")
     cta = batch_fields.get("cta", "LEARN_MORE")
 
-    print(f"\n  Processing ad: {ad_name} [{ad_format}]")
+    # Auto-promote Single Image/Video to PAC when ad set has Multi-Placement ads
+    if force_pac and ad_format == "Single Image/Video":
+        print(f"\n  Processing ad: {ad_name} [Single Image/Video → promoted to PAC]")
+    else:
+        print(f"\n  Processing ad: {ad_name} [{ad_format}]")
     if isinstance(headline, list):
         print(f"    Headlines ({len(headline)} options): {headline}")
     else:
@@ -517,7 +564,7 @@ def process_ad(config: dict, adset_id: str, ad_data: dict, batch_fields: dict,
             headline, primary_text, description, destination_url, cta, download_dir,
             url_tags=url_tags,
         )
-    elif ad_format == "Multi-Placement":
+    elif ad_format == "Multi-Placement" or (force_pac and ad_format == "Single Image/Video"):
         return _process_multi_placement_ad(
             config, adset_id, ad_name, attachments,
             headline, primary_text, description, destination_url, cta, download_dir,
@@ -532,11 +579,13 @@ def process_ad(config: dict, adset_id: str, ad_data: dict, batch_fields: dict,
         )
 
 
-def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dict:
+def run_launcher(client_slug: str, record_id: str, dry_run: bool = False,
+                 config_override: dict | None = None) -> dict:
     """Run the FB Ads Launcher programmatically.
 
     Returns a summary dict on success, raises on failure.
     Can be called from CLI (main()) or from the Modal webhook.
+    Pass config_override to use a pre-loaded (possibly mutated) config.
     """
     print(f"\n{'='*60}")
     print(f"FB Ads Launcher — {client_slug}")
@@ -546,12 +595,34 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
 
     # 1. Load config
     print("\n1. Loading configuration...")
-    config = load_all(client_slug)
+    config = config_override or load_all(client_slug)
 
     config_errors = validate_config(config)
     if config_errors:
         raise ValueError(f"Configuration errors: {'; '.join(config_errors)}")
     print("  Config loaded successfully")
+
+    # 1b. Resolve Instagram upfront (before any Meta objects are created)
+    print("\n1b. Resolving Instagram account...")
+    resolve_instagram(config)
+
+    # 1c. Sync Meta names → Airtable dropdowns (so ad set/campaign names are current)
+    try:
+        print("\n1c. Syncing Meta names to Airtable dropdowns...")
+        sync_meta_dropdowns(client_slug)
+        print("  Dropdowns synced")
+    except Exception as e:
+        print(f"  Warning: Dropdown sync failed (non-blocking): {e}")
+
+    # 1d. Pre-flight connectivity checks (skip in dry-run for speed)
+    if not dry_run:
+        print("\n1d. Running pre-flight checks...")
+        preflight_errors = run_preflight(config)
+        if preflight_errors:
+            raise ValueError(f"Pre-flight failed: {'; '.join(preflight_errors)}")
+        print("  All pre-flight checks passed")
+    else:
+        print("\n1d. Skipping pre-flight checks (dry run)")
 
     # 2. Read Airtable brief
     print("\n2. Reading Airtable brief...")
@@ -562,6 +633,17 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
     print(f"  Ads: {len(brief['ads'])} subtask(s)")
     print(f"  Fields: {json.dumps(batch_fields, indent=4, default=str)}")
 
+    # 2b. Idempotency guard — skip if status is "Launched" (not just if campaign ID exists,
+    # because "Existing" campaign mode naturally has a pre-existing campaign ID)
+    if batch_fields.get("_status") == "Launched":
+        msg = (
+            f"Record {record_id} already launched "
+            f"(status={batch_fields.get('_status')}, "
+            f"campaign={batch_fields.get('_meta_campaign_id')}). Skipping."
+        )
+        print(f"\n  {msg}")
+        return {"status": "already_launched", "message": msg}
+
     # 3. Validate brief
     print("\n3. Validating brief...")
     brief_errors = validate_brief(brief, batch_fields, dry_run=dry_run)
@@ -569,21 +651,28 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
         raise ValueError(f"Brief validation errors: {'; '.join(brief_errors)}")
     print("  Brief is valid")
 
-    # 4. Build targeting spec
-    print("\n4. Building targeting spec...")
-    targeting_spec = build_targeting_spec(config, batch_fields)
-    print(f"  Targeting: {json.dumps(targeting_spec, indent=2)}")
+    # 4. Build targeting spec (only needed for new ad sets)
+    adset_mode = str(batch_fields.get("ad_set", "New")).strip().lower()
+    if adset_mode == "existing":
+        print("\n4. Skipping targeting spec (using existing ad set)")
+        targeting_spec = {}
+    else:
+        print("\n4. Building targeting spec...")
+        targeting_spec = build_targeting_spec(config, batch_fields)
+        print(f"  Targeting: {json.dumps(targeting_spec, indent=2)}")
 
-    # Track created objects for error reporting
-    created_objects = []
+    # Track created objects for error reporting and rollback
+    # CRITICAL: Only newly created objects (is_new=True) are eligible for rollback.
+    # Existing objects that were found (not created) must NEVER be deleted on failure.
+    created_objects = []   # list of (type, id, is_new)
     campaign_id = None
     campaign_name = None
 
     try:
         # 5. Find or create campaign
         print("\n5. Campaign...")
-        campaign_id, campaign_name = find_or_create_campaign(config, batch_fields, dry_run)
-        created_objects.append(("campaign", campaign_id))
+        campaign_id, campaign_name, campaign_is_new = find_or_create_campaign(config, batch_fields, dry_run)
+        created_objects.append(("campaign", campaign_id, campaign_is_new))
 
         # Inject resolved campaign name into batch_fields for ad set naming
         batch_fields["_resolved_campaign_name"] = campaign_name
@@ -613,11 +702,11 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
             # ── Flexible Ad: combine ALL creatives + text variants into 1 ad ──
             print("  Mode: Flexible Ad (1 dynamic ad set, 1 ad with all creatives)")
 
-            adset_id = find_or_create_adset(
+            adset_id, adset_is_new = find_or_create_adset(
                 config, campaign_id, batch_fields, targeting_spec, dry_run,
                 is_dynamic_creative=True,
             )
-            created_objects.append(("adset", adset_id))
+            created_objects.append(("adset", adset_id, adset_is_new))
 
             print("\n7. Building flex creative...")
             result = _process_flex_ad(
@@ -625,14 +714,14 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
                 url_tags=url_tags,
             )
             ad_results.append(result)
-            created_objects.append(("ad", result.get("ad_id", "unknown")))
+            created_objects.append(("ad", result.get("ad_id", "unknown"), True))
         else:
             # ── Standard / Multi-Placement / Carousel: 1 ad set, multiple ads ──
-            adset_id = find_or_create_adset(
+            adset_id, adset_is_new = find_or_create_adset(
                 config, campaign_id, batch_fields, targeting_spec, dry_run,
                 is_dynamic_creative=False,
             )
-            created_objects.append(("adset", adset_id))
+            created_objects.append(("adset", adset_id, adset_is_new))
 
             print("\n7. Creating ads...")
             for ad_data in brief["ads"]:
@@ -641,21 +730,49 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
                     url_tags=url_tags,
                 )
                 ad_results.append(result)
-                created_objects.append(("ad", result.get("ad_id", "unknown")))
+                created_objects.append(("ad", result.get("ad_id", "unknown"), True))
 
     except (MetaApiError, ValueError, RuntimeError) as e:
         print(f"\nERROR: {e}")
-        print(f"Objects created before failure:")
-        for obj_type, obj_id in created_objects:
-            print(f"  {obj_type}: {obj_id}")
+        print(f"Objects before failure:")
+        for obj_type, obj_id, is_new in created_objects:
+            print(f"  {obj_type}: {obj_id} ({'NEW' if is_new else 'EXISTING — will NOT delete'})")
 
-        # Send failure notification
+        # Rollback: ONLY delete NEWLY CREATED objects in reverse order (ads → ad sets → campaigns)
+        # CRITICAL: Never delete existing objects (campaigns/ad sets the user already had)
+        rollback_results = []
+        if not dry_run and created_objects:
+            new_objects = [(t, i) for t, i, is_new in created_objects if is_new]
+            if new_objects:
+                print("\nRolling back newly created objects...")
+                for obj_type, obj_id in reversed(new_objects):
+                    if not obj_id or obj_id == "DRY_RUN":
+                        continue
+                    try:
+                        delete_object(config, obj_id)
+                        print(f"  Rolled back {obj_type}: {obj_id}")
+                        rollback_results.append((obj_type, obj_id, True))
+                    except Exception as rollback_err:
+                        print(f"  Rollback FAILED for {obj_type} {obj_id}: {rollback_err}")
+                        rollback_results.append((obj_type, obj_id, False))
+            else:
+                print("\nNo newly created objects to roll back (all objects were existing)")
+
+        # Send failure notification with rollback status
         if notify_failure and config.get("slack_webhook_url"):
+            rollback_msg = ""
+            if rollback_results:
+                rolled = [f"{t}:{i}" for t, i, ok in rollback_results if ok]
+                failed = [f"{t}:{i}" for t, i, ok in rollback_results if not ok]
+                if rolled:
+                    rollback_msg += f"\nRolled back: {', '.join(rolled)}"
+                if failed:
+                    rollback_msg += f"\nRollback FAILED: {', '.join(failed)}"
             try:
                 notify_failure(
                     config["slack_webhook_url"],
                     client_slug=client_slug,
-                    error=str(e),
+                    error=str(e) + rollback_msg,
                     created_objects=created_objects,
                     task_url=brief.get("task_url", ""),
                 )
@@ -664,7 +781,7 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False) -> dic
         raise
 
     # 8. Summary
-    adset_ids = [obj_id for obj_type, obj_id in created_objects if obj_type == "adset"]
+    adset_ids = [obj_id for obj_type, obj_id, _ in created_objects if obj_type == "adset"]
     ads_manager_url = (
         f"https://adsmanager.facebook.com/adsmanager/manage/campaigns"
         f"?act={config['fb_ad_account_id']}"

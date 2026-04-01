@@ -1,0 +1,143 @@
+# Resilient Daughters — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# Main campaign: "0915RD MMS ABO Sales Objective"
+# Match by looking at existing campaigns in the ad account.
+default_campaign_keyword: "0915RD MMS ABO"
+
+# ─── Budget ───
+default_daily_budget: 50  # USD per ad set
+
+# ─── Audience & Targeting ───
+# Default: LAL stack (29 lookalike audiences from the January ad set)
+# Exclusions apply to all audience types.
+default_audience_type: lookalike
+default_geo_locations:
+  countries:
+    - US
+
+# LAL stack — 3 source groups, 1-5% tiers each + page visitor LALs
+default_lookalike_audiences:
+  # FM/MY/PP Past Purchasers L180D (1% through 5%)
+  - id: "120221084066790227"
+    label: "LAL (US, 1%) - FM,MY,PP - Past Purchasers L180D"
+  - id: "120221084072200227"
+    label: "LAL (US, 2-3%) - FM,MY,PP - Past Purchasers L180D"
+  - id: "120221084072210227"
+    label: "LAL (US, 4-5%) - FM,MY,PP - Past Purchasers L180D"
+  - id: "120221084072230227"
+    label: "LAL (US, 1-2%) - FM,MY,PP - Past Purchasers L180D"
+  - id: "120221084073340227"
+    label: "LAL (US, 3-4%) - FM,MY,PP - Past Purchasers L180D"
+  # AOT All Customers (1% through 5%)
+  - id: "120221084143840227"
+    label: "LAL (US, 1%) - AOT - All Customers 04/15/2025"
+  - id: "120221084146560227"
+    label: "LAL (US, 3-4%) - AOT - All Customers 04/15/2025"
+  - id: "120221084146630227"
+    label: "LAL (US, 1-2%) - AOT - All Customers 04/15/2025"
+  - id: "120221084146640227"
+    label: "LAL (US, 2-3%) - AOT - All Customers 04/15/2025"
+  - id: "120221084146800227"
+    label: "LAL (US, 4-5%) - AOT - All Customers 04/15/2025"
+  # PP All Customers (1% through 5%)
+  - id: "120221084237850227"
+    label: "LAL (US, 1%) - PP - All Customers 04/15/2025"
+  - id: "120221084240940227"
+    label: "LAL (US, 2-3%) - PP - All Customers 04/15/2025"
+  - id: "120221084241710227"
+    label: "LAL (US, 4-5%) - PP - All Customers 04/15/2025"
+  - id: "120221084241740227"
+    label: "LAL (US, 3-4%) - PP - All Customers 04/15/2025"
+  - id: "120221084241800227"
+    label: "LAL (US, 1-2%) - PP - All Customers 04/15/2025"
+  # FS All Customers (1% through 5%)
+  - id: "120221084276030227"
+    label: "LAL (US, 1%) - FS - All Customers 04/15/2025"
+  - id: "120221084276920227"
+    label: "LAL (US, 1-2%) - FS - All Customers 04/15/2025"
+  - id: "120221084276930227"
+    label: "LAL (US, 2-3%) - FS - All Customers 04/15/2025"
+  - id: "120221084276950227"
+    label: "LAL (US, 4-5%) - FS - All Customers 04/15/2025"
+  - id: "120221084276960227"
+    label: "LAL (US, 3-4%) - FS - All Customers 04/15/2025"
+  # AOT Page Visitors L365D (1% through 3%)
+  - id: "120221084884520227"
+    label: "LAL (US, 1%) - AOT - Page Visitors L365D"
+  - id: "120221084885390227"
+    label: "LAL (US, 2-3%) - AOT - Page Visitors L365D"
+  - id: "120221084885400227"
+    label: "LAL (US, 1-2%) - AOT - Page Visitors L365D"
+  # FM Page Visitors L365D (1% through 3%)
+  - id: "120221084893380227"
+    label: "LAL (US, 1%) - FM - Page Visitors L365D"
+  - id: "120221084893510227"
+    label: "LAL (US, 1-2%) - FM - Page Visitors L365D"
+  - id: "120221084893520227"
+    label: "LAL (US, 2-3%) - FM - Page Visitors L365D"
+  # PP Page Visitors L365D (1% through 3%)
+  - id: "120221084896320227"
+    label: "LAL (US, 1%) - PP - Page Visitors L365D"
+  - id: "120221084896370227"
+    label: "LAL (US, 1-2%) - PP - Page Visitors L365D"
+  - id: "120221084896380227"
+    label: "LAL (US, 2-3%) - PP - Page Visitors L365D"
+
+standard_exclusions:
+  - type: custom_audience
+    id: "120228275390140227"
+    label: "RD Leads - Updated August 7th 2025"
+  - type: custom_audience
+    id: "120228275414830227"
+    label: "RD - Customers Updated August 7th 2025"
+  - type: custom_audience
+    id: "120230008389090227"
+    label: "RD - Customer List - Updated 15 Sept 2025"
+  - type: custom_audience
+    id: "120230008432650227"
+    label: "RD | Sign Up 180D (PIXEL)"
+
+# ─── Optimization ───
+default_optimization_goal: OFFSITE_CONVERSIONS  # Sales
+default_conversion_event: PURCHASE
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+# IMPORTANT: Always use 7-day click attribution unless told otherwise.
+attribution_setting: 7d_click
+
+# ─── Products ───
+# Single product: Resilient Daughters course.
+products:
+  - name: Resilient Daughters
+    type: course
+    status: active
+
+# ─── Ad Copy Strategy ───
+# Default: pull top-performing headline + primary text from the last 30 days.
+# Override: user provides specific ad copy.
+ad_copy_strategy: top_performing_last_30d
+
+# ─── Creative Handling ───
+# User will specify: carousel, single image, flex ads, multi-format.
+# Default: single image ads unless told otherwise.
+default_creative_type: single_image
+default_cta: LEARN_MORE
+
+# ─── Naming Convention ───
+# Already defined in fb_ads_config.json:
+#   campaign: {date}_{buying_type}_{phase}_{objective}_{geo}
+#   adset:    {campaign_name}_{targeting_type}_{audience_label}
+#   ad:       {ad_name}
+
+# ─── Client-Specific Notes ───
+# IMPORTANT: Shared ad account (1385884178800701) with Primal Path and Forming Men.
+# Must use Resilient Daughters' Pixel (877075395001496).
+# The fb_ads_config.json already has the correct pixel.
+#
+# WARNING: Live ad sets are currently using pixel 321606713264525 (Primal Path DM Pixel)
+# which may be incorrect. User specified Resilient Daughters' Pixel should be used.
+# Verify with user before launching if pixel matters for the campaign.
+resilient_daughters_pixel_id: "877075395001496"

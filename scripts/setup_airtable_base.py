@@ -22,7 +22,13 @@ import time
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+# Load root .env from Antigravity workspace
+_root_env = os.path.join(SCRIPTS_DIR, "..", "..", "Antigravity", ".env")
+if os.path.exists(_root_env):
+    load_dotenv(_root_env)
+else:
+    load_dotenv()
 
 AIRTABLE_API = "https://api.airtable.com/v0"
 
@@ -133,6 +139,11 @@ AD_SETS_FIELDS = [
         },
     },
     {"name": "10. Custom Audience IDs", "type": "multilineText"},
+    {
+        "name": "10. Custom Audiences",
+        "type": "multipleSelects",
+        "options": {"choices": []},
+    },
     {"name": "11. Interest Keywords", "type": "multilineText"},
     {"name": "12. Destination URL", "type": "url"},
     {
@@ -186,6 +197,11 @@ AD_SETS_FIELDS = [
     {"name": "Meta Campaign ID", "type": "singleLineText"},
     {"name": "Meta Ad Set IDs", "type": "multilineText"},
     {"name": "16. Launch Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+    {
+        "name": "17. Exclusion Audiences",
+        "type": "multipleSelects",
+        "options": {"choices": []},
+    },
 ]
 
 ADS_FIELDS = [
@@ -338,14 +354,17 @@ def migrate_all_clients():
     """Add the Attribution Window field to all client Airtable bases."""
     import glob as glob_mod
 
-    configs_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "clients")
+    configs_dir = os.path.join(os.path.dirname(__file__), "..", "clients")
     config_files = glob_mod.glob(os.path.join(configs_dir, "*/fb_ads_config.json"))
 
     if not config_files:
         print("No client configs found.")
         return
 
-    attribution_field = next(f for f in AD_SETS_FIELDS if f["name"] == "14. Attribution Window")
+    migrate_fields = [
+        next(f for f in AD_SETS_FIELDS if f["name"] == "17. Exclusion Audiences"),
+        next(f for f in AD_SETS_FIELDS if f["name"] == "10. Custom Audiences"),
+    ]
 
     print(f"Migrating {len(config_files)} client base(s)...\n")
     for config_path in sorted(config_files):
@@ -354,12 +373,16 @@ def migrate_all_clients():
             cfg = json.load(f)
 
         base_id = cfg.get("airtable_base_id", "")
-        if not base_id:
-            print(f"  {client_slug}: no airtable_base_id — skipping")
+        if not base_id or base_id.startswith("appXXX"):
+            print(f"  {client_slug}: no valid airtable_base_id — skipping")
             continue
 
         print(f"  {client_slug} ({base_id}):")
-        migrate_add_field(base_id, "Ad Sets", attribution_field)
+        try:
+            for field_def in migrate_fields:
+                migrate_add_field(base_id, "Ad Sets", field_def)
+        except SystemExit:
+            print(f"    Failed — skipping")
         time.sleep(0.3)
 
     print("\nMigration complete.")

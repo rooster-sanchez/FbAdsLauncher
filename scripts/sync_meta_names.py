@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 """
-Sync Meta Names to Airtable — Fetches active campaigns and ad sets from Meta,
-then updates the singleSelect field choices in the Airtable Ad Sets table so
+Sync Meta Names to Airtable — Fetches campaigns and ad sets from Meta
+(all statuses: ACTIVE, PAUSED, WITH_ISSUES, DISAPPROVED, etc.), then
+updates the singleSelect field choices in the Airtable Ad Sets table so
 dropdowns stay current.
 
 Updates these fields in the Ad Sets table:
-  - "2. Campaign Name" — populated with active campaign names
-  - "Existing Ad Set Name" — populated with active ad set names
+  - "2. Campaign Name" — populated with campaign names (all statuses)
+  - "Existing Ad Set Name" — populated with ad set names (all statuses)
 
 Usage:
     # Single client
@@ -34,7 +35,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from config_loader import load_all
-from meta_api import _meta_request, BASE_URL
+from meta_api import _meta_request, BASE_URL, get_custom_audiences
 
 import requests
 
@@ -43,14 +44,22 @@ AIRTABLE_META_URL = "https://api.airtable.com/v0/meta/bases"
 
 # ─── Meta Fetchers ────────────────────────────────────────────────────────────
 
-def fetch_active_campaigns(config: dict) -> list[str]:
-    """Fetch all ACTIVE campaign names from Meta, handling pagination."""
+ALL_STATUSES = [
+    "ACTIVE", "PAUSED", "ARCHIVED",
+    "IN_PROCESS", "WITH_ISSUES", "CAMPAIGN_PAUSED",
+    "ADSET_PAUSED", "DISAPPROVED", "PENDING_REVIEW",
+    "PREAPPROVED", "PENDING_BILLING_INFO",
+]
+
+
+def fetch_campaigns(config: dict) -> list[str]:
+    """Fetch campaign names from Meta in all statuses, handling pagination."""
     ad_account_id = config["fb_ad_account_id"]
     url = f"{BASE_URL}/act_{ad_account_id}/campaigns"
     params = {
         "access_token": config["fb_access_token"],
         "fields": "name",
-        "effective_status": json.dumps(["ACTIVE"]),
+        "effective_status": json.dumps(ALL_STATUSES),
         "limit": 100,
     }
 
@@ -72,14 +81,14 @@ def fetch_active_campaigns(config: dict) -> list[str]:
     return names
 
 
-def fetch_active_adsets(config: dict) -> list[str]:
-    """Fetch all ACTIVE ad set names from Meta, handling pagination."""
+def fetch_adsets(config: dict) -> list[str]:
+    """Fetch ad set names from Meta in all statuses, handling pagination."""
     ad_account_id = config["fb_ad_account_id"]
     url = f"{BASE_URL}/act_{ad_account_id}/adsets"
     params = {
         "access_token": config["fb_access_token"],
         "fields": "name",
-        "effective_status": json.dumps(["ACTIVE"]),
+        "effective_status": json.dumps(ALL_STATUSES),
         "limit": 100,
     }
 
@@ -123,7 +132,7 @@ def get_table_fields(airtable_api_key: str, base_id: str, table_id: str) -> tupl
             field_map = {f["name"]: f["id"] for f in table.get("fields", [])}
             choices_map = {}
             for f in table.get("fields", []):
-                if f.get("type") == "singleSelect":
+                if f.get("type") in ("singleSelect", "multipleSelects"):
                     choices_map[f["name"]] = {
                         c["name"] for c in f.get("options", {}).get("choices", [])
                     }
@@ -135,12 +144,15 @@ def get_table_fields(airtable_api_key: str, base_id: str, table_id: str) -> tupl
 def update_field_choices(airtable_api_key: str, base_id: str, table_id: str,
                          field_name: str, names: list[str],
                          existing_choices: set[str],
-                         dry_run: bool = False) -> bool:
-    """Add missing singleSelect choices via the typecast workaround.
+                         dry_run: bool = False,
+                         multi_select: bool = False) -> bool:
+    """Add missing select choices via the typecast workaround.
 
     The Airtable Meta API can't add choices to existing select fields via PATCH.
     Instead, we create a dummy record with typecast=true (which forces the option
     into existence), then immediately delete it.
+
+    For multipleSelects fields, set multi_select=True so the value is sent as a list.
     """
     new_names = [n for n in names if n not in existing_choices]
 
@@ -164,9 +176,10 @@ def update_field_choices(airtable_api_key: str, base_id: str, table_id: str,
 
     for name in new_names:
         # Create dummy record with typecast to force the option into existence
+        field_value = [name] if multi_select else name
         resp = requests.post(
             record_url, headers=headers,
-            json={"fields": {field_name: name}, "typecast": True},
+            json={"fields": {field_name: field_value}, "typecast": True},
             timeout=30,
         )
         if not resp.ok:
@@ -186,7 +199,7 @@ def update_field_choices(airtable_api_key: str, base_id: str, table_id: str,
 
 def find_all_clients() -> list[str]:
     """Find all client slugs that have airtable_base_id in fb_ads_config.json."""
-    workspace_root = SCRIPTS_DIR.resolve().parents[2]
+    workspace_root = SCRIPTS_DIR.resolve().parent
     clients_dir = workspace_root / "clients"
     pattern = str(clients_dir / "*" / "fb_ads_config.json")
 
@@ -223,21 +236,29 @@ def sync_client(client_slug: str, dry_run: bool = False):
         print(f"  Error: AIRTABLE_API_KEY not set")
         return
 
-    # Fetch active campaigns and ad sets from Meta
-    print(f"\n  Fetching active campaigns...")
-    campaigns = fetch_active_campaigns(config)
-    print(f"  Found {len(campaigns)} active campaign(s)")
+    # Fetch campaigns and ad sets from Meta (all statuses)
+    print(f"\n  Fetching campaigns (all statuses)...")
+    campaigns = fetch_campaigns(config)
+    print(f"  Found {len(campaigns)} campaign(s)")
     for name in campaigns:
         print(f"    - {name}")
 
-    print(f"\n  Fetching active ad sets...")
-    adsets = fetch_active_adsets(config)
-    print(f"  Found {len(adsets)} active ad set(s)")
+    print(f"\n  Fetching ad sets (all statuses)...")
+    adsets = fetch_adsets(config)
+    print(f"  Found {len(adsets)} ad set(s)")
     for name in adsets:
         print(f"    - {name}")
 
-    if not campaigns and not adsets:
-        print(f"\n  No active campaigns or ad sets found, nothing to sync.")
+    print(f"\n  Fetching custom audiences...")
+    audiences_raw = get_custom_audiences(config)
+    # Format as "Audience Name (ID)" so the launcher can parse the ID back out
+    audiences = [f"{a['name']} ({a['id']})" for a in audiences_raw]
+    print(f"  Found {len(audiences)} custom audience(s)")
+    for name in audiences:
+        print(f"    - {name}")
+
+    if not campaigns and not adsets and not audiences:
+        print(f"\n  No campaigns, ad sets, or audiences found, nothing to sync.")
         return
 
     # Look up field IDs and existing choices (single API call)
@@ -256,10 +277,26 @@ def sync_client(client_slug: str, dry_run: bool = False):
             adset_field_name = name
             break
 
+    exclusion_field_name = None
+    for name in ("17. Exclusion Audiences", "Exclusion Audiences"):
+        if name in fields_map:
+            exclusion_field_name = name
+            break
+
+    custom_audiences_field_name = None
+    for name in ("10. Custom Audiences", "Custom Audiences"):
+        if name in fields_map:
+            custom_audiences_field_name = name
+            break
+
     if not campaign_field_name:
         print(f"  Warning: Could not find field '2. Campaign Name' in table {table_id}")
     if not adset_field_name:
         print(f"  Warning: Could not find field '5. Existing Ad Set Name' in table {table_id}")
+    if not exclusion_field_name:
+        print(f"  Warning: Could not find field '17. Exclusion Audiences' in table {table_id}")
+    if not custom_audiences_field_name:
+        print(f"  Warning: Could not find field '10. Custom Audiences' in table {table_id}")
 
     # Update field choices via typecast workaround
     if campaigns and campaign_field_name:
@@ -276,17 +313,34 @@ def sync_client(client_slug: str, dry_run: bool = False):
                              choices_map.get(adset_field_name, set()),
                              dry_run=dry_run)
 
+    if audiences and exclusion_field_name:
+        print(f"\n  Updating '{exclusion_field_name}' field choices...")
+        update_field_choices(airtable_key, base_id, table_id,
+                             exclusion_field_name, audiences,
+                             choices_map.get(exclusion_field_name, set()),
+                             dry_run=dry_run,
+                             multi_select=True)
+
+    if audiences and custom_audiences_field_name:
+        print(f"\n  Updating '{custom_audiences_field_name}' field choices...")
+        update_field_choices(airtable_key, base_id, table_id,
+                             custom_audiences_field_name, audiences,
+                             choices_map.get(custom_audiences_field_name, set()),
+                             dry_run=dry_run,
+                             multi_select=True)
+
     # Summary
     print(f"\n  Summary for {client_slug}:")
     print(f"    Campaigns synced: {len(campaigns)}")
     print(f"    Ad sets synced:   {len(adsets)}")
+    print(f"    Audiences synced: {len(audiences)}")
     if dry_run:
         print(f"    Mode: DRY RUN (no changes made)")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync active Meta campaign/ad set names to Airtable singleSelect fields"
+        description="Sync Meta campaign/ad set names (all statuses) to Airtable singleSelect fields"
     )
     parser.add_argument("client_slug", nargs="?", default=None,
                         help="Client slug (e.g., ts_twelve_south)")

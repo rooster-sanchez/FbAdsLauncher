@@ -22,7 +22,7 @@
     "utm_content": "{{ad.name}}",
     "utm_term": "{{adset.name}}"
   },
-  "airtable_base_id": "appVtPmFGaWaoj7hA",
+  "airtable_base_id": "app4ClZecLHFxmdSJ",
   "airtable_ad_sets_table_id": "tblcWSGbKsNO3cbnF",
   "airtable_ads_table_id": "tblmzzZbq1N9kbSjg"
 }

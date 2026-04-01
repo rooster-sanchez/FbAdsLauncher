@@ -1,0 +1,74 @@
+# Pescador on the Fly — Launch Preferences
+# Used by Claude to launch ads with minimal briefing
+
+# ─── Campaign Selection ───
+# Default campaign: "Relaunch ABO"
+# Match by looking at existing campaigns in the ad account.
+default_campaign_keyword: "Relaunch ABO"
+
+# ─── Budget ───
+default_daily_budget: 100  # USD per ad set
+
+# ─── Audience & Targeting ───
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+
+standard_exclusions:
+  - type: custom_audience
+    id: "6551813984611"
+    label: "PURCHASE - 180 Days (HOT)"
+    note: "Pixel-based purchase exclusion, last 180 days"
+  - type: custom_audience
+    id: "6633146150211"
+    label: "Dec 2024 - All Customer Export - Shopify with LTV"
+  - type: custom_audience
+    id: "6822204620011"
+    label: "July 2025 - All Customers Export"
+# Based on the Jan 2026 ad sets (current standard).
+# March 2026 ad sets were missing exclusions — that was a miss.
+
+# ─── Optimization ───
+default_optimization_goal: OFFSITE_CONVERSIONS  # Sales
+default_conversion_event: PURCHASE
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+# IMPORTANT: Always use 7-day click attribution unless told otherwise.
+attribution_setting: 7d_click
+
+# ─── Products ───
+products:
+  - name: Hefe v2 Rod
+    status: active
+  - name: El Rey Rod
+    status: active
+  - name: Econ 101 Rod
+    status: active
+# Often ads promote multiple rods together (generic rod ads).
+# Product is usually identifiable from the creative or filename — ask user if unclear.
+
+# ─── Ad Copy Strategy ───
+# Default: pull top-performing headline + primary text from the last 30 days.
+# Key metrics to evaluate: Spend and ROAS.
+# Override: user provides headline and/or ad copy alongside the creative assets.
+ad_copy_strategy: top_performing_last_30d
+ad_copy_ranking_metrics:
+  - spend
+  - roas
+
+# ─── Creative Handling ───
+# User will specify: carousel, single image, flex ads, multi-format.
+# Default: single image ads unless told otherwise.
+default_creative_type: single_image
+default_cta: SHOP_NOW
+
+# ─── Naming Convention ───
+# Already defined in fb_ads_config.json:
+#   campaign: {date}_{buying_type}_{phase}_{objective}_{geo}
+#   adset:    {campaign_name}_{targeting_type}_{audience_label}
+#   ad:       {ad_name}
+
+# ─── Client-Specific Notes ───
+# None currently.
