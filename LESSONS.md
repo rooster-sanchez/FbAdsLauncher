@@ -10,7 +10,7 @@
 - Use `instagram_user_id` (not `instagram_actor_id`) in `object_story_spec` — get the correct ID from `GET /{page_id}?fields=instagram_business_account`
 - `special_ad_categories` must be sent as string `"[]"` not empty array
 
-- Instagram user IDs using legacy endpoints (error code 36106) are deprecated and will fail. Fixed by updating configs with correct IG IDs: PP/RD/FM use @fatherscollective (17841411587000289), FE uses 17841469065114612. To find the correct IG for a client, check existing ads: `GET /{adset_id}/ads?fields=creative{object_story_spec}`.
+- Instagram user IDs using legacy endpoints (error code 36106) are deprecated and will fail. Fix by updating configs with the correct IG user ID. To find the correct IG for a client, check existing ads: `GET /{adset_id}/ads?fields=creative{object_story_spec}`.
 - Instagram auto-resolution via `GET /{page_id}?fields=instagram_business_account,connected_instagram_account` and `/instagram_accounts` edge doesn't always work — some pages have no IG linked. This is fine, they run Facebook-only.
 - Pre-flight validation should run BEFORE any Meta objects are created, not at creative-creation time. Otherwise orphaned campaigns/ad sets accumulate when IG fails.
 

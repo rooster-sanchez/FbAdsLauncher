@@ -100,7 +100,7 @@ modal app logs fb-ads-launcher
 
 ## Syncing Base Structure
 
-The template base (`applXM4Udl33lKIst`) is the source of truth. When you change fields in the template:
+The template base (`YOUR_TEMPLATE_BASE_ID`) is the source of truth. When you change fields in the template:
 
 ```bash
 python3 scripts/sync_bases.py          # Preview

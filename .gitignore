@@ -11,8 +11,8 @@ __pycache__/
 # OS
 .DS_Store
 
-# Claude Code local state
-.claude/settings.local.json
+# Claude Code
+.claude/
 
 # Temp files from ad creative downloads
 /tmp_attachments/

@@ -1,0 +1,30 @@
+# Example Client — Launch Preferences
+default_campaign_keyword: "YOUR_CAMPAIGN_NAME"
+default_adset_keyword: "YOUR_ADSET_NAME"
+
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+default_age_range:
+  min: 18
+  max: 65
+
+default_optimization_goal: OFFSITE_CONVERSIONS
+default_billing_event: IMPRESSIONS
+destination_type: WEBSITE
+
+attribution_setting: 7d_click
+
+products:
+  - name: Your Product
+    type: product
+    status: active
+
+ad_copy_strategy: top_performing_last_30d
+ad_copy_count:
+  primary_text: 3
+  headlines: 3
+
+default_creative_type: single_image
+default_cta: LEARN_MORE

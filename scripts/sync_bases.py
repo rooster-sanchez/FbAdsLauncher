@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 Sync Airtable base structures from the template to all client bases.
 
-Reads the template base (applXM4Udl33lKIst) and applies field-level changes
+Reads the template base and applies field-level changes
 to every client base that has an airtable_base_id in fb_ads_config.json.
 
 Handles:
@@ -39,7 +39,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 AIRTABLE_API = "https://api.airtable.com/v0"
-TEMPLATE_BASE_ID = "applXM4Udl33lKIst"
+TEMPLATE_BASE_ID = "YOUR_TEMPLATE_BASE_ID"
 
 # ─── Rename Maps ─────────────────────────────────────────────────────────────
 # When you rename a field in the template, add it here so the sync script
