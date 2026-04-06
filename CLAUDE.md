@@ -113,6 +113,7 @@ python3 scripts/sync_bases.py --apply  # Apply to all client bases
 - Activation is a separate script (`activate_ads.py`)
 - Use `--dry-run` to preview everything before creating
 - NEVER delete existing campaigns/ad sets/ads without explicit user approval
+- **MANDATORY: Always confirm with the user before deleting ANY object on ANY ad account (campaigns, ad sets, ads, audiences, creatives, etc.). This applies regardless of permission mode, including Bypass mode. No exceptions.**
 
 ## Debugging Launches
 
