@@ -1,6 +1,11 @@
-# Secrets
+# Secrets — never commit to a public repo
 .env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
 clients/*/credentials/secrets.env
+clients/*/credentials/*.env
 
 # Python
 __pycache__/
@@ -11,8 +16,22 @@ __pycache__/
 # OS
 .DS_Store
 
+# Editor / IDE
+.vscode/
+.idea/
+
 # Claude Code local state
-.claude/settings.local.json
+.claude/
+!.claude/commands/
+
+# Node / Next.js (abandoned web UI, keep out just in case)
+node_modules/
+.next/
+*.tsbuildinfo
 
 # Temp files from ad creative downloads
 /tmp_attachments/
+
+# Abandoned directories (UI scrapped 2026-03-31)
+web/
+supabase/

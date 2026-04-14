@@ -74,6 +74,19 @@ def _clean_text(text: str) -> str:
     return text.strip() if text else ""
 
 
+def _normalize_line_breaks(text: str) -> str:
+    """Ensure paragraph breaks survive Meta's rendering.
+
+    Meta collapses single \\n in ad primary text, so we convert any
+    sequence of 1+ newlines into \\n\\n (visible paragraph break).
+    """
+    if not text:
+        return text
+    import re
+    paragraphs = [p.strip() for p in re.split(r'\n+', text.strip())]
+    return "\n\n".join(p for p in paragraphs if p)
+
+
 def get_batch_brief(record_id: str, config: dict) -> dict:
     """Read a complete batch brief from an Airtable Ad Set record + linked Ads.
 
@@ -168,12 +181,12 @@ def get_batch_brief(record_id: str, config: dict) -> dict:
         for pi in range(1, 4):
             prefix = primary_num_map[pi]
             pt = ad_f.get(f"{prefix}. Primary Text {pi}", "") or ad_f.get(f"Primary Text {pi}", "") or ""
-            pt = _clean_text(pt)
+            pt = _normalize_line_breaks(_clean_text(pt))
             if pt:
                 primary_texts.append(pt)
         # Backward compat: also check old "Primary Text" field name
         if not primary_texts:
-            old_pt = _clean_text(ad_f.get("Primary Text", "") or "")
+            old_pt = _normalize_line_breaks(_clean_text(ad_f.get("Primary Text", "") or ""))
             if old_pt:
                 primary_texts.append(old_pt)
 

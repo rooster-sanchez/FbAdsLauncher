@@ -112,8 +112,9 @@ python3 scripts/sync_bases.py --apply  # Apply to all client bases
 - All ads are created **PAUSED** — nothing spends money until explicitly activated
 - Activation is a separate script (`activate_ads.py`)
 - Use `--dry-run` to preview everything before creating
-- NEVER delete existing campaigns/ad sets/ads without explicit user approval
-- **MANDATORY: Always confirm with the user before deleting ANY object on ANY ad account (campaigns, ad sets, ads, audiences, creatives, etc.). This applies regardless of permission mode, including Bypass mode. No exceptions.**
+- **NEVER delete ANYTHING without explicit user approval. This includes campaigns, ad sets, ads, audiences, creatives, custom audiences, pixels, pages, or any other object on any ad account, Airtable base, or external system. No exceptions — not even "cleanup" of objects you just created. Always ask first.**
+- This applies regardless of permission mode, including Bypass mode.
+- If an object becomes orphaned or empty as a side effect of another action (e.g., moving ad sets out of a campaign), leave it alone and inform the user. Let them decide whether to delete it.
 
 ## Debugging Launches
 

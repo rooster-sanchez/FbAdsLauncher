@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import requests
 
-META_API_VERSION = "v21.0"
+META_API_VERSION = "v25.0"
 META_BASE = f"https://graph.facebook.com/{META_API_VERSION}"
 
 

@@ -17,6 +17,7 @@ import requests
 
 API_VERSION = "v25.0"
 BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
+DEFAULT_HEADERS = {"User-Agent": "FbAdsLauncher/1.0"}
 
 # Valid CTA types for Meta ads
 VALID_CTAS = {
@@ -38,13 +39,78 @@ class MetaApiError(Exception):
         super().__init__(f"Meta API Error {code}: {message}")
 
 
+# Warn once the highest rate-limit metric crosses this percentage.
+RATE_LIMIT_WARN_THRESHOLD = 75
+
+
+def _log_rate_limit(resp: requests.Response) -> None:
+    """Parse Meta's rate-limit headers and print a warning when utilization is high.
+
+    Meta returns three possible headers, each a JSON object with percentage metrics:
+      - X-Business-Use-Case-Usage: per-business-id, list of dicts with call_count/
+        total_cputime/total_time (all 0-100) and estimated_time_to_regain_access.
+      - X-Ad-Account-Usage: acc_id_util_pct and reset_time_duration.
+      - X-App-Usage: app-level call_count/total_cputime/total_time.
+    """
+    buckets: list[tuple[str, int, int]] = []  # (label, pct, eta_minutes)
+
+    buc_raw = resp.headers.get("X-Business-Use-Case-Usage")
+    if buc_raw:
+        try:
+            buc = json.loads(buc_raw)
+            for biz_id, entries in buc.items():
+                for entry in entries:
+                    pct = max(
+                        int(entry.get("call_count", 0)),
+                        int(entry.get("total_cputime", 0)),
+                        int(entry.get("total_time", 0)),
+                    )
+                    eta = int(entry.get("estimated_time_to_regain_access", 0))
+                    label = f"BUC[{entry.get('type', '?')}:{biz_id}]"
+                    buckets.append((label, pct, eta))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    acc_raw = resp.headers.get("X-Ad-Account-Usage")
+    if acc_raw:
+        try:
+            acc = json.loads(acc_raw)
+            pct = int(acc.get("acc_id_util_pct", 0))
+            eta = int(acc.get("reset_time_duration", 0)) // 60
+            buckets.append(("AdAccount", pct, eta))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    app_raw = resp.headers.get("X-App-Usage")
+    if app_raw:
+        try:
+            app = json.loads(app_raw)
+            pct = max(
+                int(app.get("call_count", 0)),
+                int(app.get("total_cputime", 0)),
+                int(app.get("total_time", 0)),
+            )
+            buckets.append(("App", pct, 0))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    for label, pct, eta in buckets:
+        if pct >= RATE_LIMIT_WARN_THRESHOLD:
+            eta_str = f", resumes in ~{eta}min" if eta else ""
+            print(f"  ⚠️  Meta rate limit {label}: {pct}%{eta_str}")
+
+
 def _meta_request(method: str, url: str, access_token: str, retries: int = 3, **kwargs) -> dict:
     """Make a request to Meta API with retry logic for transient errors.
 
     Retries on 500/502/503 with exponential backoff. Never retries 4xx errors.
     """
+    # Merge our default headers with any caller-supplied headers
+    headers = {**DEFAULT_HEADERS, **kwargs.pop("headers", {})}
+
     for attempt in range(retries):
-        resp = requests.request(method, url, timeout=120, **kwargs)
+        resp = requests.request(method, url, timeout=120, headers=headers, **kwargs)
+        _log_rate_limit(resp)
 
         if resp.ok:
             return resp.json()
@@ -251,6 +317,15 @@ def create_adset(config: dict, campaign_id: str, name: str,
     # Inject Advantage Audience off into targeting (Meta requires this flag)
     targeting.setdefault("targeting_automation", {"advantage_audience": 0})
 
+    # Exclusion audiences: must live INSIDE the targeting JSON. Sending at the
+    # top level (payload["excluded_custom_audiences"]) returns success:true but
+    # Meta silently drops it. targeting.exclusions.custom_audiences is rejected
+    # (subcode 1870221). The only path Meta actually stores is inside targeting.
+    if exclusion_audience_ids:
+        targeting["excluded_custom_audiences"] = [
+            {"id": aid} for aid in exclusion_audience_ids
+        ]
+
     # If no Instagram account is configured, restrict to Facebook-only placements
     # (Meta rejects creatives without instagram_user_id when IG placements are enabled)
     if not config.get("instagram_user_id"):
@@ -298,12 +373,6 @@ def create_adset(config: dict, campaign_id: str, name: str,
 
     if start_time:
         payload["start_time"] = start_time
-
-    # Exclusion audiences: top-level param (Meta deprecated targeting.exclusions.custom_audiences)
-    if exclusion_audience_ids:
-        payload["excluded_custom_audiences"] = json.dumps(
-            [{"id": aid} for aid in exclusion_audience_ids]
-        )
 
     # Add promoted object (pixel) if available and using conversion optimization
     if config.get("default_pixel_id") and "CONVERSION" in opt_goal.upper():

@@ -20,6 +20,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 # Add scripts dir to path for local imports
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -60,6 +62,19 @@ try:
 except ImportError:
     notify_success = None
     notify_failure = None
+
+
+def _load_standard_exclusions(client_slug: str) -> list[str]:
+    """Load standard_exclusions from launch_preferences.yml, returning a list of audience IDs."""
+    from config_loader import WORKSPACE_ROOT, _CLIENTS_DIR_OVERRIDE
+    clients_dir = Path(_CLIENTS_DIR_OVERRIDE) if _CLIENTS_DIR_OVERRIDE else WORKSPACE_ROOT / "clients"
+    prefs_path = clients_dir / client_slug / "launch_preferences.yml"
+    if not prefs_path.exists():
+        return []
+    with open(prefs_path) as f:
+        prefs = yaml.safe_load(f) or {}
+    exclusions = prefs.get("standard_exclusions", [])
+    return [str(e["id"]) for e in exclusions if isinstance(e, dict) and "id" in e]
 
 
 def validate_brief(brief: dict, batch_fields: dict, dry_run: bool = False) -> list[str]:
@@ -293,6 +308,12 @@ def find_or_create_adset(config: dict, campaign_id: str, batch_fields: dict,
         return "DRY_RUN_ADSET_ID", True
 
     exclusion_ids = batch_fields.get("exclusion_audiences", [])
+    if not exclusion_ids:
+        # Fall back to standard_exclusions from launch_preferences.yml
+        std_exclusions = _load_standard_exclusions(config.get("client_slug", ""))
+        if std_exclusions:
+            exclusion_ids = std_exclusions
+            print(f"  Applying {len(exclusion_ids)} standard exclusion(s) from launch_preferences.yml")
     if exclusion_ids:
         print(f"  Excluding {len(exclusion_ids)} audience(s): {exclusion_ids}")
 
@@ -484,6 +505,15 @@ def _process_flex_ad(config: dict, adset_id: str, all_ads: list[dict],
 
     # Upload all attachments
     media_refs = [_download_and_upload(config, att, download_dir) for att in all_attachments]
+
+    # Flex creatives don't support mixed image+video — pick one type.
+    # When both exist, prefer images (videos are silently dropped).
+    has_images = any(r["type"] == "image" for r in media_refs)
+    has_videos = any(r["type"] == "video" for r in media_refs)
+    if has_images and has_videos:
+        print(f"    Warning: Flex ads cannot mix images and videos — using images only "
+              f"({sum(1 for r in media_refs if r['type'] == 'video')} video(s) excluded)")
+        media_refs = [r for r in media_refs if r["type"] == "image"]
 
     # Build asset_feed_spec with all creatives + all text variants
     adset_name = str(batch_fields.get("adset_name", "") or "").strip() or "Flex"
