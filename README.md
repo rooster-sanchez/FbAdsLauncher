@@ -22,6 +22,26 @@ Writes Meta IDs back to Airtable + Slack notification
 - **14 client ad accounts**, each with a config in `clients/{slug}/fb_ads_config.json`
 - All ads are created **PAUSED** — activation is a separate step
 
+## Quick Start (Claude Code)
+
+If you use [Claude Code](https://claude.com/claude-code), setup is a conversation:
+
+```bash
+git clone <this-repo>
+cd FbAdsLauncher
+claude            # open Claude Code here
+```
+
+Then in Claude Code, type:
+
+```
+/onboard
+```
+
+Claude will walk you through API keys (Meta + Airtable), a single-brand or agency fork, per-client config (auto-creating Airtable tables and auto-resolving the linked Instagram account where possible), and a live connection test. No README required.
+
+If you're not using Claude Code, follow the manual setup below.
+
 ## Setup for Teammates
 
 This is a public repo. **Secrets are not committed.** To run the project locally, you need credentials Luis will share via a secure channel (1Password / direct handoff).

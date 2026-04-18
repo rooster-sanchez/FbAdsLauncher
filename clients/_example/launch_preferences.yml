@@ -1,0 +1,64 @@
+# {Client Name} — Launch Preferences
+# Used by Claude to launch ads with minimal briefing.
+# Every field is optional — delete anything you don't want Claude to assume.
+
+# ─── Campaign Selection ───
+# Named campaigns Claude can match by keyword when you say e.g. "sales campaign".
+# Leave empty if you don't use persistent campaigns.
+campaigns:
+  sales: ""      # e.g. "ABO {Client} Sales"
+  lead_gen: ""   # e.g. "{Client} ABO Lead Gen"
+
+# ─── Budget ───
+default_daily_budget: 50  # USD per ad set
+
+# ─── Audience & Targeting ───
+# User will specify one of: broad, lookalike, or interest.
+# Exclusions are universal across all audience types.
+default_audience_type: broad
+default_geo_locations:
+  countries:
+    - US
+
+# Custom audiences to always exclude (customers, past leads, etc.).
+# Get IDs from Ads Manager → Audiences, or `python3 scripts/list_custom_audiences.py {slug}`.
+standard_exclusions: []
+# Example:
+# standard_exclusions:
+#   - type: custom_audience
+#     id: "120XXXXXXXXXXXXXX"
+#     label: "Customer list — updated YYYY-MM"
+
+# ─── Optimization ───
+default_optimization_goal: OFFSITE_CONVERSIONS
+default_conversion_event: PURCHASE
+default_billing_event: IMPRESSIONS
+
+# ─── Attribution ───
+attribution_setting: 7d_click
+
+# ─── Products ───
+# Helps Claude disambiguate when you say "launch the {product} campaign".
+# Single-product clients can leave this empty.
+products: []
+# Example:
+# products:
+#   - name: "Course Name"
+#     type: course
+#     status: active
+
+# ─── Ad Copy Strategy ───
+# Default: pull top-performing headline + primary text from the last 30 days
+# of this client's ads. Override: user provides specific ad copy.
+ad_copy_strategy: top_performing_last_30d
+
+# ─── Creative Handling ───
+# User will specify: carousel, single_image, flex, multi_format.
+default_creative_type: single_image
+default_cta: LEARN_MORE
+
+# ─── Client-Specific Notes ───
+# Free-form notes for Claude. Examples: shared ad accounts, specific pixel
+# to prefer when multiple exist, platforms to avoid, etc.
+notes: |
+  (Add any client-specific gotchas here.)

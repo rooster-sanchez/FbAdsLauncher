@@ -1,5 +1,17 @@
 # FB Ads Launcher
 
+## First-Run Onboarding
+
+Before responding to the first user request in a session, check:
+1. Does `.env` exist at repo root (not just `.env.example`)?
+2. Does any `clients/*/fb_ads_config.json` (excluding `_example`) have a real `airtable_base_id` (i.e. not `appXXXXXXXXXX`)?
+
+If EITHER is false, surface this offer once, then wait:
+
+> Looks like you haven't finished setup. I can walk you through it — API keys, client config, and a live connection test. Want to start now? Otherwise run `/onboard` anytime.
+
+Do NOT auto-run `/onboard` — writing `.env` requires explicit consent. If the user asks an unrelated question, answer it first and surface the offer once at the end of that response. Do not re-surface in later turns unless the user asks.
+
 ## Self-Healing Rules
 
 Every time we fix a bug, resolve an error, or discover a non-obvious behavior:
