@@ -1,121 +1,62 @@
 # FB Ads Launcher — Roadmap
 
-Last updated: 2026-03-23
+Last updated: 2026-05-05
 
 ---
 
 ## Phase 1: Reliability Hardening [SHIPPED]
 
-**Goal**: Make the launcher work 99% of the time across all accounts.
+**Goal**: Make the launcher work 99% of the time across all client accounts.
 
-### Completed (2026-03-23)
+### Completed
 
 - [x] **Pre-flight validation** — 6 connectivity checks (token, ad account, page, Instagram, pixel, Airtable) run before any Meta objects are created. Catches bad configs upfront instead of failing mid-launch. → `scripts/preflight.py`
 - [x] **Instagram resolution at startup** — Auto-resolves Instagram user ID from the Facebook Page before launch, not at creative-creation time. Prevents orphaned campaign/ad set objects when IG fails. → `scripts/preflight.py:resolve_instagram()`
-- [x] **Rollback on partial failure** — When a launch fails mid-way, automatically deletes created objects in reverse order (ads → ad sets → campaigns). No more orphaned Meta objects. → `scripts/meta_api.py:delete_object()` + `scripts/main.py`
+- [x] **Rollback on partial failure** — When a launch fails mid-way, automatically deletes only **newly created** objects in reverse order (ads → ad sets → campaigns). Existing campaigns/ad sets are never touched, even if the launch was scoped to them — they carry historical spend. → `scripts/meta_api.py:delete_object()` + `scripts/main.py`
 - [x] **Idempotency guard** — Detects already-launched records and skips them. Prevents duplicates when Airtable automation fires twice. → `scripts/main.py` + `scripts/airtable_reader.py`
-- [x] **Health check endpoint** — `GET /health` on Modal checks all 14 clients' connectivity and reports status. → `scripts/modal_webhook.py:health()`
-- [x] **Self-healing error handler** — Wraps the launcher in an intelligent retry loop. Auto-fixes: broken Instagram (strips IG, retries FB-only), rate limits (backoff), transient 500s (retry), targeting too narrow (broaden), duplicate names (append suffix). Escalates unfixable errors with clear human instructions. → `scripts/error_agent.py`
-- [x] **Expanded config validation** — Now checks table IDs, warns on missing Instagram/pixel when optimization goal is CONVERSIONS. → `scripts/config_loader.py`
-- [x] **Refactored test_connection.py** — Uses shared preflight module, now also checks Instagram and pixel. → `scripts/test_connection.py`
+- [x] **Health check endpoint** — `GET /health` on Modal checks all configured clients' connectivity and reports status. → `scripts/modal_webhook.py:health()`
+- [x] **Self-healing error handler** — Wraps the launcher in an intelligent retry loop. Auto-fixes: broken Instagram (strips IG, retries FB-only), rate limits (backoff), transient 500s (retry), targeting too narrow (broaden), duplicate names (append suffix), large-video uploads (chunked protocol). Escalates unfixable errors with clear human instructions. → `scripts/error_agent.py`
+- [x] **Expanded config validation** — Checks table IDs, warns on missing Instagram/pixel when optimization goal is CONVERSIONS. → `scripts/config_loader.py`
+- [x] **Refactored `test_connection.py`** — Uses shared preflight module, also checks Instagram and pixel. → `scripts/test_connection.py`
+- [x] **API v25.0 migration** — Migrated from v22.0 → v25.0 (Mar 2026) for PAC support and current Meta best-practices. Includes fixes for PAC creative limits (subcodes 1885374/1885878), `is_dynamic_creative` immutability, the 10-asset cap, and the deprecated `standard_enhancements` wrapper. See `LESSONS.md` for the full list.
+- [x] **Instagram ID fixes** — Resolved deprecated IG user IDs (legacy endpoint error 36106). PP / RD / FM now use `@fatherscollective` (`17841411587000289`). FE uses `17841469065114612`.
 
 ### Current State
 
 | Metric | Value |
 |--------|-------|
-| Healthy clients | 10/14 |
-| Unhealthy (broken IG IDs) | 4 (fe_fig_and_eagle, fm_forming_men, pp_primal_path, rd_resilient_daughters) |
-| Self-healing coverage | IG auth, rate limits, transient errors, duplicates, targeting, video processing |
-| Deployed | Modal webhook + health endpoint |
+| Active client configs | 14 |
+| Self-healing coverage | IG auth, rate limits, transient errors, duplicates, targeting, video processing, chunked uploads |
+| API version | v25.0 |
+| Deployed | Modal webhook + health endpoint (`fb-ads-launcher` app) |
 
-### Known Issues to Watch
+### Watchlist
 
-- 4 clients have deprecated Instagram IDs (legacy endpoint error 36106). Self-healing auto-strips IG and retries Facebook-only. Long-term fix: update IG IDs or remove from config.
-- `modal app logs` streams indefinitely — no easy way to pull historical logs. Consider adding launch logging to a database (Phase 2 will solve this with `launch_logs` table).
-- API version upgraded from v21.0 → v22.0 (v21.0 deprecated Sep 2025). Monitor for any v22.0 deprecation announcements — latest is v25.0 as of Mar 2026.
-
----
-
-## Phase 2: Web UI [NEXT]
-
-**Goal**: Replace Airtable with a proper web app. Nova-inspired but better.
-
-### Tech Stack
-
-| Component | Choice |
-|-----------|--------|
-| Frontend | Next.js 14+ (App Router) |
-| UI | Tailwind + shadcn/ui |
-| Database | Supabase (Postgres + Auth + File Storage + Realtime) |
-| Auth | Supabase magic link (2-5 users) |
-| Backend | Keep Modal for launching |
-
-### 2A. Database Schema
-
-Replace Airtable + JSON config files with Supabase tables:
-- `clients` — replaces fb_ads_config.json
-- `creatives` — NEW creative library with dimensions, tags, launch status
-- `multi_placement_groups` — pairs 1:1 + 4:5/9:16 creative variants
-- `ad_copy_templates` — reusable copy templates
-- `drafts` — replaces Airtable Ad Sets table
-- `draft_ads` — replaces Airtable Ads table
-- `launch_logs` — audit trail (what was created, when, by whom, any errors)
-
-### 2B. Python Backend Adapter
-
-- `scripts/supabase_reader.py` — Same interface as airtable_reader (zero changes to main.py)
-- `scripts/supabase_writer.py` — Writes back to Supabase + launch_logs
-- Dual-source support in modal_webhook.py (Airtable + Supabase payloads)
-
-### 2C. Frontend Pages (Nova-inspired)
-
-| Section | Route | Page |
-|---------|-------|------|
-| — | `/` | Dashboard — recent launches, health status |
-| Launch | `/launch` | Launch Ads — table of creatives with ad name, ad profiles (FB + IG per ad), primary text, links, CTA, ad set assignment. Save Draft, Bulk Edit, Load Template, Group Creatives. "Launch Ads" button. |
-| | `/launch/multi-placement` | Multi-placement grouping — visual pairing of aspect ratios |
-| | `/creatives` | Creative Library — upload from local/Google Drive/Dropbox. Browse with filters. |
-| | `/launched` | Launched Ads — audit trail with status badges |
-| | `/drafts` | Saved drafts |
-| Ad Copy | `/ad-copy/defaults` | Default Ad Copy per client — auto-fills new launches |
-| | `/ad-copy/templates` | Reusable copy templates |
-| Setup | `/settings/accounts` | Client config — FB Page + IG selectors with validation |
-| | `/settings/naming` | Ad Naming Convention builder (drag-drop tags, live preview) |
-| | `/settings/launch` | Launch Settings — tracking, paused toggle, geo |
-| System | `/health` | Health Dashboard — all clients green/red |
-
-### UI Improvements Over Nova
-
-- Per-ad Instagram validation with warning icons
-- Pre-launch validation panel (checklist of checks with green/red)
-- Real-time launch progress via Supabase realtime
-- Google Drive link integration for bulk creative import
-
-### Migration Strategy
-
-- Run Airtable + Supabase in parallel (adapter pattern)
-- Migrate client configs first (JSON → clients table)
-- Switch clients one at a time
-- Keep Airtable reader as fallback
+- v25.0 deprecations to monitor: `degrees_of_freedom_spec.creative_features_spec.standard_enhancements` is already gone — Meta is moving toward per-feature enrollment. Keep checking the changelog at each version bump.
+- `modal app logs` streams indefinitely — no easy way to pull historical logs. Lift-and-shift to a structured launch-log table is still on the table if it becomes painful (see Phase 2 below).
 
 ---
 
-## Phase 3: Prompt/Chat Interface [FUTURE]
+## Phase 2: Operational Polish [ACTIVE]
 
-**Goal**: Natural language ad launching — "Upload these to 12 South with $50/day broad women 25-45"
+**Goal**: Quality-of-life improvements — no major architecture changes.
 
-### 3A. Natural Language Parser
+The previous Phase 2 ("Web UI: Replace Airtable with a Next.js + Supabase app") was **scrapped on 2026-03-31**. Airtable + this Python launcher remained the better tool for the job; the abandoned `web/` and `supabase/` directories are excluded via `.gitignore`. The team now drives the launcher via Airtable + Claude Code (`/onboard` for first-time setup, conversational launches for everything else).
 
-- `scripts/prompt_parser.py` — Claude API parses NL into structured ad_set JSON
-- System prompt includes client name→slug mapping, valid field schemas
-- Tool use for guaranteed structured output
-- Returns partial brief that **pre-fills the form** (doesn't auto-launch for safety)
+### Candidates
 
-### 3B. Chat UI
+- [ ] **Structured launch-logs table** — Persist every launch attempt (success, partial, failed) to an Airtable `Launch Logs` table or a lightweight Supabase row. Replaces the current "tail Modal logs" workflow.
+- [ ] **Per-client rate-limit dashboard** — Surface the 75% / 90% utilization warnings already emitted by `meta_api.py` somewhere visible (Slack daily digest or simple status page).
+- [ ] **Onboarding CLI polish** — `/onboard` already covers first-time setup; add `/onboard --client {slug}` for adding a new client to an existing install without re-doing API keys.
+- [ ] **CAPI deduplication audit script** — Sanity-check that pixel events are correctly deduped against Meta's matched-events report.
 
-- `/launch/chat` page — text input + file drag-drop
-- Files upload to Supabase Storage
-- Claude parses command → pre-fills launch form → user reviews → confirms
+---
+
+## Phase 3: Natural-Language Launching [FUTURE]
+
+**Goal**: "Upload these to 12 South with $50/day broad women 25-45 in the Flex campaign" — Claude parses the intent, prefills a brief, the operator confirms, the launcher runs.
+
+This is now possible directly inside Claude Code without a custom UI: drop creatives into the conversation, describe the launch, Claude assembles the Airtable record (or calls `main.py` directly) and the existing pipeline takes over. Tracked here as a usage pattern rather than a code deliverable.
 
 ---
 
@@ -127,16 +68,22 @@ Replace Airtable + JSON config files with Supabase tables:
 |------|---------|
 | `main.py` | Main orchestrator — reads brief, creates Meta objects |
 | `modal_webhook.py` | Modal webhook + health endpoint |
-| `error_agent.py` | Self-healing error handler |
+| `error_agent.py` | Self-healing retry wrapper |
 | `preflight.py` | Pre-flight validation + Instagram resolution |
 | `config_loader.py` | Loads credentials + client config |
 | `airtable_reader.py` | Reads Ad Set + Ads from Airtable |
-| `meta_api.py` | All Meta Marketing API operations |
+| `clickup_reader.py` | Alternative brief source — reads from ClickUp |
+| `meta_api.py` | All Meta Marketing API operations + rate-limit monitoring |
 | `targeting.py` | Builds targeting specs |
 | `notifier.py` | Slack notifications |
 | `test_connection.py` | CLI pre-flight checks |
 | `activate_ads.py` | Moves PAUSED → ACTIVE |
-| `sync_meta_names.py` | Syncs Meta naming back to Airtable |
+| `list_custom_audiences.py` | Lists available custom / lookalike audiences |
+| `drive_client.py` | Google Drive asset fetcher |
+| `setup_airtable_base.py` | Provisions tables in a new client's Airtable base |
+| `setup_webhook.py` | Registers / lists / deletes Airtable automation webhooks |
+| `sync_bases.py` | Syncs template-base structure to all client bases |
+| `sync_meta_names.py` | Syncs Meta object names back to Airtable dropdowns |
 
 ### Endpoints
 

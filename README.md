@@ -49,9 +49,10 @@ This is a public repo. **Secrets are not committed.** To run the project locally
 ### 1. Install dependencies
 
 ```bash
-python3 -m pip install -r requirements.txt  # if present, else:
-python3 -m pip install requests python-dotenv pyairtable pyyaml modal
+python3 -m pip install -r requirements.txt
 ```
+
+(The launcher hits Airtable and Meta Graph directly via `requests` — no `pyairtable` or `facebook_business` SDK.)
 
 ### 2. Environment variables
 
@@ -120,15 +121,23 @@ curl https://rooster--fb-ads-launcher-health.modal.run
 | Script | Purpose |
 |:-------|:--------|
 | `main.py` | Main orchestrator — reads Airtable, creates Meta objects |
-| `modal_webhook.py` | Modal webhook endpoint (auto-trigger from Airtable) |
+| `modal_webhook.py` | Modal webhook + health endpoint (auto-trigger from Airtable) |
 | `config_loader.py` | Loads credentials + `fb_ads_config.json` |
 | `airtable_reader.py` | Reads Ad Set + Ads, downloads attachments, writes back IDs |
+| `clickup_reader.py` | Alternative brief source — reads from ClickUp |
 | `meta_api.py` | All Meta Marketing API operations + rate-limit monitoring |
 | `targeting.py` | Targeting spec builders (broad, lookalike, interest) |
 | `notifier.py` | Slack webhook notifications |
 | `preflight.py` | 6 pre-flight checks (token, ad account, page, IG, pixel, Airtable) |
+| `error_agent.py` | Self-healing retry wrapper (IG strip, rate-limit backoff, etc.) |
 | `activate_ads.py` | Moves PAUSED objects to ACTIVE |
 | `test_connection.py` | Verifies Meta + Airtable connectivity |
+| `list_custom_audiences.py` | Lists available custom / lookalike audiences for a client |
+| `drive_client.py` | Google Drive asset fetcher |
+| `setup_airtable_base.py` | Provisions tables in a new client's Airtable base |
+| `setup_webhook.py` | Registers / lists / deletes Airtable automation webhooks |
+| `sync_bases.py` | Syncs template-base structure to all client bases |
+| `sync_meta_names.py` | Syncs Meta object names back to Airtable dropdowns |
 
 ## Client Config
 
