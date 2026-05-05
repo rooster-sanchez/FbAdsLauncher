@@ -1,126 +1,110 @@
 # FB Ads Launcher
 
-Autonomous agent that reads Airtable Ad Set briefs and launches Facebook/Meta ads via the Marketing API. Triggered automatically when an Airtable Ad Set's status changes to **Ready to Launch**.
+A safety-first Meta ads launcher. One Python codebase, 14 client accounts, every campaign shipped **PAUSED** — and it recovers from the six most common Meta API failures on its own.
 
-## Architecture
+No `facebook_business` SDK. Raw `requests`, Graph API **v25.0**, deployed serverless on Modal.
+
+---
+
+## What it does
+
+Hand it a structured ad brief. It will:
+
+1. **Pre-flight** the brief — six connectivity checks (token, ad account, page, Instagram, pixel, brief source). Bad configs fail fast, before any Meta object exists.
+2. **Resolve** the Instagram account from the Facebook Page so a misconfigured IG never leaves you with an orphan campaign.
+3. **Create** the campaign, ad sets, and ads — all PAUSED — and write the Meta IDs back to the brief.
+4. **Self-heal** the usual failures: deprecated IG IDs, rate limits, transient 500s, narrow targeting, duplicate names, and large videos (chunked uploads kick in at 50 MB).
+5. **Ping** Slack with the result and the next step.
+
+Activation is always an explicit second step (`activate_ads.py`). Nothing spends money until you say so.
+
+## How a launch flows
 
 ```
-Airtable Ad Set status → "Ready to Launch"
-    ↓
-Airtable automation fires POST to Modal endpoint
-    (payload: record_id + client_slug)
-    ↓
-Modal loads client config, reads Ad Set + linked Ads from Airtable
-    ↓
-Creates campaign, ad sets, ads (PAUSED) in Meta Ads Manager
-    ↓
-Writes Meta IDs back to Airtable + Slack notification
+  Brief                Launcher                    Meta
+  ─────                ────────                    ────
+  Airtable record   ┐                            ┌─ Campaign  (PAUSED)
+  ClickUp task      ├─►  preflight              ├─ Ad sets   (PAUSED)
+  CLI invocation    ┘    │                       └─ Ads       (PAUSED)
+                         ▼
+                      self-heal ◄──── Meta API ◄─┘
+                         │             (v25.0)
+                         ▼
+                    write IDs back
+                    + Slack ping
 ```
 
-- Python scripts on **Modal** (serverless), triggered by Airtable webhooks
-- No `facebook_business` SDK — raw `requests` against **Graph API v25.0**
-- **14 client ad accounts**, each with a config in `clients/{slug}/fb_ads_config.json`
-- All ads are created **PAUSED** — activation is a separate step
+Most clients drive launches from Airtable (status → "Ready to Launch" fires a Modal webhook). ClickUp and direct CLI invocation use the same launcher; only the brief reader changes.
 
-## Quick Start (Claude Code)
+## Quick start (Claude Code)
 
-If you use [Claude Code](https://claude.com/claude-code), setup is a conversation:
+If you have [Claude Code](https://claude.com/claude-code), setup is a single command:
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/rooster-sanchez/FbAdsLauncher.git
 cd FbAdsLauncher
-claude            # open Claude Code here
+claude
 ```
 
-Then in Claude Code, type:
+Then in Claude:
 
 ```
 /onboard
 ```
 
-Claude will walk you through API keys (Meta + Airtable), a single-brand or agency fork, per-client config (auto-creating Airtable tables and auto-resolving the linked Instagram account where possible), and a live connection test. No README required.
+`/onboard` walks you through API keys, single-brand or agency setup, per-client config (auto-creating Airtable tables and resolving the linked Instagram account), and a live connection test. No README required after that point.
 
-If you're not using Claude Code, follow the manual setup below.
-
-## Setup for Teammates
-
-This is a public repo. **Secrets are not committed.** To run the project locally, you need credentials Luis will share via a secure channel (1Password / direct handoff).
-
-### 1. Install dependencies
+## Quick start (manual)
 
 ```bash
+# 1. Install
 python3 -m pip install -r requirements.txt
-```
 
-(The launcher hits Airtable and Meta Graph directly via `requests` — no `pyairtable` or `facebook_business` SDK.)
-
-### 2. Environment variables
-
-Copy `.env.example` → `.env` and fill in the real values (get from Luis):
-
-```bash
+# 2. Configure secrets — get values from Luis
 cp .env.example .env
-```
 
-Required keys:
-
-| Key | Purpose |
-|:----|:--------|
-| `FB_ACCESS_TOKEN` | Meta Marketing API system user token (Partner BM) |
-| `AIRTABLE_API_KEY` | Airtable personal access token |
-| `SLACK_WEBHOOK_URL` | Slack notifications channel |
-
-### 3. Modal workspace
-
-Production runs on Modal under the `rooster` workspace. Ask Luis to add you as a member — all secrets live in the Modal secret `fb-ads-launcher-env`, so you don't need to manage them yourself for deploys.
-
-```bash
-python3 -m pip install modal
-modal token new                  # auth with your Modal account
-modal app logs fb-ads-launcher   # tail production logs
-```
-
-### 4. Verify connectivity
-
-```bash
+# 3. Verify connectivity for a client
 python3 scripts/test_connection.py <client_slug>
-```
 
-## Usage
+# 4. Dry-run a launch (no Meta API writes)
+python3 scripts/main.py <client_slug> <brief_id> --dry-run
 
-### Manual launch
+# 5. Live launch (everything created PAUSED)
+python3 scripts/main.py <client_slug> <brief_id>
 
-```bash
-# Dry run (no Meta API calls)
-python3 scripts/main.py <client_slug> <airtable_record_id> --dry-run
-
-# Live (creates everything PAUSED)
-python3 scripts/main.py <client_slug> <airtable_record_id>
-```
-
-### Activate paused ads
-
-```bash
+# 6. Activate when ready
 python3 scripts/activate_ads.py <client_slug> <campaign_id>
 ```
 
-### Deploy Modal webhook
+### Required environment
 
-```bash
-python3 -m modal deploy scripts/modal_webhook.py
-```
+| Key | Purpose |
+|:----|:--------|
+| `FB_ACCESS_TOKEN` | System user token from the Partner Business Manager |
+| `AIRTABLE_API_KEY` | Personal access token for the brief base(s) |
+| `SLACK_WEBHOOK_URL` | Channel for launch + error notifications |
 
-### Health check
+Production secrets live in the Modal secret `fb-ads-launcher-env`. Ask Luis to add you to the `rooster` workspace if you need to deploy.
 
-```bash
-curl https://rooster--fb-ads-launcher-health.modal.run
-```
+## The interesting bits
 
-## Key Scripts
+**Self-healing error agent** — `scripts/error_agent.py` wraps the launcher in a retry loop that auto-fixes broken Instagram accounts (strip IG, retry FB-only), rate limits (backoff), transient 500s (retry), too-narrow targeting (broaden), duplicate ad names (suffix), and large-video uploads (chunked protocol). Unfixable errors escalate with a human-readable next step.
+
+**Rollback that doesn't bite you** — When a launch fails partway through, only **newly created** objects are deleted, in reverse order. Existing campaigns are never touched, even if the launch was scoped to them. They carry historical spend that no script gets to delete.
+
+**Pre-flight, not post-mortem** — Six checks run *before* a single Meta object is created. The launcher refuses to start if the token, ad account, page, Instagram, pixel, or brief source isn't reachable. No more orphaned campaigns from a misconfigured IG.
+
+**v25.0-aware** — Built around the current Meta API quirks: PAC creative limits (one ad_format per creative, one asset per label), `is_dynamic_creative` immutability, the 10-asset cap, and the deprecated `standard_enhancements` wrapper. Full list in [LESSONS.md](LESSONS.md).
+
+**Rate-limit watchdog** — `meta_api.py` reads Meta's `X-Business-Use-Case-Usage` header on every call and warns at 75% utilization. You'll see throttling coming before it lands.
+
+**Chunked video uploads at 50 MB** — Single-shot uploads above that threshold silently 413 on Meta's CDN. The launcher switches to `upload_phase=start/transfer/finish` automatically.
+
+## Anatomy
 
 | Script | Purpose |
 |:-------|:--------|
-| `main.py` | Main orchestrator — reads Airtable, creates Meta objects |
+| `main.py` | Orchestrator — reads brief, runs preflight, creates Meta objects, writes IDs back |
 | `modal_webhook.py` | Modal webhook + health endpoint (auto-trigger from Airtable) |
 | `config_loader.py` | Loads credentials + `fb_ads_config.json` |
 | `airtable_reader.py` | Reads Ad Set + Ads, downloads attachments, writes back IDs |
@@ -128,20 +112,28 @@ curl https://rooster--fb-ads-launcher-health.modal.run
 | `meta_api.py` | All Meta Marketing API operations + rate-limit monitoring |
 | `targeting.py` | Targeting spec builders (broad, lookalike, interest) |
 | `notifier.py` | Slack webhook notifications |
-| `preflight.py` | 6 pre-flight checks (token, ad account, page, IG, pixel, Airtable) |
-| `error_agent.py` | Self-healing retry wrapper (IG strip, rate-limit backoff, etc.) |
+| `preflight.py` | Six pre-flight checks + Instagram resolution |
+| `error_agent.py` | Self-healing retry wrapper |
 | `activate_ads.py` | Moves PAUSED objects to ACTIVE |
-| `test_connection.py` | Verifies Meta + Airtable connectivity |
-| `list_custom_audiences.py` | Lists available custom / lookalike audiences for a client |
+| `test_connection.py` | CLI pre-flight checks for a single client |
+| `list_custom_audiences.py` | Lists custom / lookalike audiences for a client |
 | `drive_client.py` | Google Drive asset fetcher |
 | `setup_airtable_base.py` | Provisions tables in a new client's Airtable base |
 | `setup_webhook.py` | Registers / lists / deletes Airtable automation webhooks |
-| `sync_bases.py` | Syncs template-base structure to all client bases |
-| `sync_meta_names.py` | Syncs Meta object names back to Airtable dropdowns |
+| `sync_bases.py` | Syncs template-base schema to all client bases |
+| `sync_meta_names.py` | Syncs Meta object names back to dropdowns |
 
-## Client Config
+## Client config
 
-Each client has a `clients/{slug}/fb_ads_config.json`:
+A client lives at `clients/{slug}/`:
+
+```
+clients/ts_twelve_south/
+├── fb_ads_config.json          # account IDs, naming, UTM defaults
+└── launch_preferences.yml      # budget, audience, exclusions, copy strategy
+```
+
+`fb_ads_config.json`:
 
 ```json
 {
@@ -160,37 +152,59 @@ Each client has a `clients/{slug}/fb_ads_config.json`:
 }
 ```
 
-Client launch defaults (budget, audience, exclusions, copy strategy) live in `clients/{slug}/launch_preferences.yml`.
+`launch_preferences.yml` is optional but recommended — it holds default budget, audience type, exclusions (Klaviyo lists, 180-day purchasers, customer-list lookalikes), product list, and ad-copy strategy. Without it, every launch needs every parameter spelled out in the brief.
 
-## Safety Rules
+See [`clients/_example/`](clients/_example/) for a fully commented template.
 
-- All ads are created **PAUSED** — nothing spends money until explicitly activated.
-- Activation is a separate, manual step (`activate_ads.py`).
-- Use `--dry-run` to preview before creating.
-- **NEVER delete any object** (campaign, ad set, ad, audience, creative) without explicit user approval — not even "cleanup" of things you just created. Ask first.
-- If an object becomes orphaned as a side effect of another action, leave it and inform the user.
+## Safety contract
 
-## Meta API Access Posture
+- **PAUSED is non-negotiable.** Every campaign, ad set, and ad ships paused. Activation is a separate explicit step.
+- **Dry-run before live.** `--dry-run` prints the full Meta payload without writing.
+- **Never delete without approval.** No script deletes anything — campaign, ad set, ad, audience, creative, custom audience — without an explicit human go. Not even "cleanup" of things just created. Applies in every permission mode.
+- **Rollback respects history.** Failed launches only roll back the *new* objects they created. Existing campaigns with spend history are untouchable.
+- **Soft-delete > delete.** Meta deletion is permanent (`status=DELETED` is irreversible). When soft-delete is wanted, the launcher uses `status=ARCHIVED`.
 
-- **System user token** (not personal) — lives in our **Partner Business Manager**
-- **Partner access** to all 14 client ad accounts (we don't own them)
-- **CAPI** enabled on every client
-- Rate-limit monitoring is built into [scripts/meta_api.py](scripts/meta_api.py) — warns at 75% utilization before Meta throttles
-
-This posture limits the blast radius of any token compromise to our Partner BM. Read more in Meta's [rate limiting docs](https://developers.facebook.com/docs/graph-api/overview/rate-limiting).
-
-## Debugging Launches
-
-You don't need to re-trigger from Airtable during debugging:
+## Deploying the webhook
 
 ```bash
-# Fix code
-python3 -m modal deploy scripts/modal_webhook.py
-python3 scripts/main.py <slug> <record_id>  # run directly
-# repeat
+modal deploy scripts/modal_webhook.py     # ship it
+modal app logs fb-ads-launcher            # tail logs
 ```
 
-## Project Notes
+The webhook URL after deploy is `https://<modal-user>--fb-ads-launcher-webhook.modal.run`. Each client's Airtable automation POSTs `{"record_id": "...", "client_slug": "..."}` to it.
 
-- **LESSONS.md** — running log of Meta API gotchas, API v25.0 quirks, PAC rules. Read before debugging.
-- **CLAUDE.md** — instructions for the Claude agent that often drives this repo.
+Health check (no auth):
+
+```bash
+curl https://rooster--fb-ads-launcher-health.modal.run
+```
+
+## Debugging launches
+
+You never need to re-trigger from Airtable during a debug loop:
+
+```bash
+# 1. Fix code
+# 2. Redeploy (only if the Modal image changed)
+modal deploy scripts/modal_webhook.py
+# 3. Re-run the same brief locally
+python3 scripts/main.py <slug> <record_id>
+# 4. Repeat
+```
+
+The local CLI hits the same code path as the webhook and produces the same Meta state.
+
+## Meta API posture
+
+- **System user token** in our Partner Business Manager, not a personal token.
+- **Partner access** to all client ad accounts — we don't own them, the client does.
+- **CAPI enabled** on every client.
+- **Rate-limit monitoring** built into `meta_api.py`. 75% utilization triggers a warning; 90% backs off.
+
+This posture limits the blast radius of a token compromise to our Partner BM. Background: Meta's [rate-limiting docs](https://developers.facebook.com/docs/graph-api/overview/rate-limiting).
+
+## Project files
+
+- [`LESSONS.md`](LESSONS.md) — running log of Meta API gotchas, v25.0 quirks, PAC rules. Read this before debugging anything weird.
+- [`CLAUDE.md`](CLAUDE.md) — instructions for Claude Code when it drives the repo (most operators do).
+- [`ROADMAP.md`](ROADMAP.md) — what shipped, what's next, what got scrapped.
