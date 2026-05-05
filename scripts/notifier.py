@@ -26,7 +26,7 @@ def notify_success(webhook_url: str, client_slug: str, campaign_name: str,
         f"Budget: ${daily_budget}/day\n"
         f"<{ads_manager_url}|View in Ads Manager>\n\n"
         f"To activate:\n"
-        f"```python3 skills/fb-ads-launcher/scripts/activate_ads.py {client_slug} {campaign_id}```"
+        f"```python3 scripts/activate_ads.py {client_slug} {campaign_id}```"
     )
 
     return _send(webhook_url, text)

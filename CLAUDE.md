@@ -60,10 +60,12 @@ python3 scripts/activate_ads.py <client_slug> <campaign_id>
 |:-------|:--------|
 | `main.py` | Main orchestrator — reads Airtable, creates Meta objects |
 | `modal_webhook.py` | Modal webhook endpoint (auto-trigger) |
-| `config_loader.py` | Loads credentials and fb_ads_config.json |
+| `config_loader.py` | Loads credentials and `fb_ads_config.json` |
 | `airtable_reader.py` | Reads Ad Set + Ads, downloads attachments, writes back IDs |
 | `meta_api.py` | All Meta Marketing API operations |
 | `targeting.py` | Builds targeting specs (broad, lookalike, interest) |
+| `preflight.py` | Pre-flight validation + Instagram resolution before any Meta writes |
+| `error_agent.py` | Self-healing retry wrapper |
 | `notifier.py` | Slack webhook notifications |
 | `activate_ads.py` | Moves PAUSED objects to ACTIVE |
 | `test_connection.py` | Verifies Meta + Airtable connectivity |
@@ -71,6 +73,8 @@ python3 scripts/activate_ads.py <client_slug> <campaign_id>
 | `sync_bases.py` | Syncs template base structure to all client bases |
 | `setup_airtable_base.py` | Creates tables in a new client base |
 | `sync_meta_names.py` | Syncs Meta naming back to Airtable |
+| `drive_client.py` | Google Drive asset fetcher |
+| `clickup_reader.py` | Reads briefs from ClickUp (alternative entry point) |
 
 ## Client Config
 
@@ -92,6 +96,8 @@ Each client needs a `clients/{slug}/fb_ads_config.json`:
   "utm_defaults": { ... }
 }
 ```
+
+Optional per-client `clients/{slug}/launch_preferences.yml` holds `standard_exclusions`, `default_lookalike_audiences`, default budget, default audience type, and product list — consumed by `main.py` when generating ad sets.
 
 ## Required Credentials
 
@@ -127,6 +133,14 @@ python3 scripts/sync_bases.py --apply  # Apply to all client bases
 - **NEVER delete ANYTHING without explicit user approval. This includes campaigns, ad sets, ads, audiences, creatives, custom audiences, pixels, pages, or any other object on any ad account, Airtable base, or external system. No exceptions — not even "cleanup" of objects you just created. Always ask first.**
 - This applies regardless of permission mode, including Bypass mode.
 - If an object becomes orphaned or empty as a side effect of another action (e.g., moving ad sets out of a campaign), leave it alone and inform the user. Let them decide whether to delete it.
+- Rollback on error only deletes NEWLY CREATED objects (`is_new=True`). NEVER deletes existing campaigns — they carry historical spend.
+- Use `status=ARCHIVED` instead of `DELETE` when soft-delete semantics are wanted — Meta deletion is permanent.
+
+## Naming Conventions
+
+- **Campaign:** `LAUNCH DATE | BUDGET TYPE | CAMPAIGN TYPE | PRODUCT | CAMPAIGN GOAL | COUNTRY`
+- **Ad Set:** `LAUNCH DATE | LAYER | AUDIENCE | AD FORMAT | ANGLE/CONCEPT | ADSET TYPE | ATTRIBUTION | OBJECTIVE`
+- **Ad:** `DATE_BRAND_ITERATION_HANDLE_ADTYPE_PRODUCT_MESSAGE_ANGLE_FORMAT_ASSET_CREATOR_DEST_CTA_DISCOUNT`
 
 ## Debugging Launches
 

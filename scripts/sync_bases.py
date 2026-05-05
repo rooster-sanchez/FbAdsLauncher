@@ -20,10 +20,10 @@ Does NOT handle (Airtable API limitation):
 
 Usage:
     # Dry run — show what would change
-    python3 agents/fb-ads-launcher/scripts/sync_bases.py
+    python3 scripts/sync_bases.py
 
     # Apply changes
-    python3 agents/fb-ads-launcher/scripts/sync_bases.py --apply
+    python3 scripts/sync_bases.py --apply
 """
 
 import argparse
@@ -143,6 +143,7 @@ def get_tables(base_id: str) -> list[dict]:
 
 
 def get_client_bases() -> list[dict]:
+    # scripts/foo.py — repo root is parents[1]
     configs_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "clients")
     config_files = glob_mod.glob(os.path.join(configs_dir, "*/fb_ads_config.json"))
 

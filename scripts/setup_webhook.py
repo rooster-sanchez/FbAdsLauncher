@@ -4,13 +4,13 @@ Register a ClickUp webhook for the FB Ads Launcher.
 
 Usage:
     # Register a new webhook
-    python3 skills/fb-ads-launcher/scripts/setup_webhook.py <modal_webhook_url>
+    python3 scripts/setup_webhook.py <modal_webhook_url>
 
     # List existing webhooks
-    python3 skills/fb-ads-launcher/scripts/setup_webhook.py --list
+    python3 scripts/setup_webhook.py --list
 
     # Delete a webhook
-    python3 skills/fb-ads-launcher/scripts/setup_webhook.py --delete <webhook_id>
+    python3 scripts/setup_webhook.py --delete <webhook_id>
 """
 
 import argparse
@@ -22,7 +22,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(WORKSPACE_ROOT / ".env")
 
 CLICKUP_API_KEY = os.getenv("CLICKUP_API_KEY", "")

@@ -4,8 +4,8 @@ Activate Ads — Move PAUSED campaign/ad set/ads to ACTIVE.
 Run this AFTER reviewing the created objects in Ads Manager.
 
 Usage:
-    python3 skills/fb-ads-launcher/scripts/activate_ads.py <client_slug> <campaign_id>
-    python3 skills/fb-ads-launcher/scripts/activate_ads.py <client_slug> <campaign_id> --dry-run
+    python3 scripts/activate_ads.py <client_slug> <campaign_id>
+    python3 scripts/activate_ads.py <client_slug> <campaign_id> --dry-run
 """
 
 import argparse

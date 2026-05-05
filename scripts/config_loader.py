@@ -15,8 +15,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Local: scripts/ is 1 parent from project root
-# Modal: scripts are at /app/scripts/ (also 1 parent)
+# scripts/foo.py — repo root is parents[1]
+# Modal: scripts are mounted at /app/scripts/ (parents[1] = /app)
 try:
     WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 except IndexError:

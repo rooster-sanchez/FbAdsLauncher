@@ -8,8 +8,8 @@ then creates campaigns, ad sets, and ads in Meta Ads Manager.
 All objects are created PAUSED. Use activate_ads.py to go live.
 
 Usage:
-    python3 agents/fb-ads-launcher/scripts/main.py <client_slug> <record_id>
-    python3 agents/fb-ads-launcher/scripts/main.py <client_slug> <record_id> --dry-run
+    python3 scripts/main.py <client_slug> <record_id>
+    python3 scripts/main.py <client_slug> <record_id> --dry-run
 """
 
 import argparse
@@ -842,7 +842,7 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False,
     if not dry_run:
         print(f"\nView in Ads Manager: {ads_manager_url}")
         print(f"\nTo activate:")
-        print(f"  python3 skills/fb-ads-launcher/scripts/activate_ads.py {client_slug} {campaign_id}")
+        print(f"  python3 scripts/activate_ads.py {client_slug} {campaign_id}")
 
         # 9. Write results back to Airtable
         print("\n8. Updating Airtable...")
@@ -870,7 +870,7 @@ def run_launcher(client_slug: str, record_id: str, dry_run: bool = False,
             f"Ads: {len(ad_results)}\n\n"
             f"View: {ads_manager_url}\n\n"
             f"To activate:\n"
-            f"python3 agents/fb-ads-launcher/scripts/activate_ads.py {client_slug} {campaign_id}"
+            f"python3 scripts/activate_ads.py {client_slug} {campaign_id}"
         )
         add_task_comment(record_id, note, config)
 

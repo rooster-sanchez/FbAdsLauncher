@@ -7,10 +7,10 @@ Your token can't create bases, so create an empty base in the Airtable UI first,
 then run this script to populate it with the right tables and fields.
 
 Usage:
-    python3 agents/fb-ads-launcher/scripts/setup_airtable_base.py appXXXXXXXX
+    python3 scripts/setup_airtable_base.py appXXXXXXXX
 
     # If you already have the base set up, just print the IDs:
-    python3 agents/fb-ads-launcher/scripts/setup_airtable_base.py appXXXXXXXX --info
+    python3 scripts/setup_airtable_base.py appXXXXXXXX --info
 """
 
 import argparse
@@ -23,8 +23,8 @@ import requests
 from dotenv import load_dotenv
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-# Load root .env from Antigravity workspace
-_root_env = os.path.join(SCRIPTS_DIR, "..", "..", "Antigravity", ".env")
+# Load root .env from repo root (scripts/ is at scripts/, repo root is 3 up)
+_root_env = os.path.join(SCRIPTS_DIR, "..", "..", "..", ".env")
 if os.path.exists(_root_env):
     load_dotenv(_root_env)
 else:
@@ -354,7 +354,8 @@ def migrate_all_clients():
     """Add the Attribution Window field to all client Airtable bases."""
     import glob as glob_mod
 
-    configs_dir = os.path.join(os.path.dirname(__file__), "..", "clients")
+    # scripts/foo.py — repo root is parents[1]
+    configs_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "clients")
     config_files = glob_mod.glob(os.path.join(configs_dir, "*/fb_ads_config.json"))
 
     if not config_files:

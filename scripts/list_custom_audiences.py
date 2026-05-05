@@ -4,8 +4,8 @@ List Custom Audiences — Shows all custom/lookalike audiences in an ad account.
 Use this to find audience IDs for the ClickUp brief's lookalike targeting.
 
 Usage:
-    python3 skills/fb-ads-launcher/scripts/list_custom_audiences.py <client_slug>
-    python3 skills/fb-ads-launcher/scripts/list_custom_audiences.py <client_slug> --filter lookalike
+    python3 scripts/list_custom_audiences.py <client_slug>
+    python3 scripts/list_custom_audiences.py <client_slug> --filter lookalike
 """
 
 import argparse

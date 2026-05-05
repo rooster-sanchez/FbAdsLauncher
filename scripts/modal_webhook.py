@@ -1,85 +1,143 @@
 """
 FB Ads Launcher — Modal Webhook Endpoint
-=========================================
+========================================
 Receives Airtable automation webhooks when an Ad Set status changes to
-"Ready to Launch" and automatically runs the FB Ads Launcher.
+"Ready to Launch" and runs the launcher.
 
 Each client's Airtable base has an automation that sends:
     {"record_id": "recXXX", "client_slug": "ts_twelve_south"}
 
-Deploy:
-    modal deploy agents/fb-ads-launcher/scripts/modal_webhook.py
+Deploy (from repo root):
+    modal deploy scripts/modal_webhook.py
 
-Test (one-off):
-    modal run agents/fb-ads-launcher/scripts/modal_webhook.py
-
-Secrets to create first (see bottom of file for exact commands):
-    modal secret create fb-ads-launcher-env \
-        FB_ACCESS_TOKEN="..." \
-        AIRTABLE_API_KEY="..." \
+Secret (create once):
+    modal secret create fb-ads-launcher-env \\
+        FB_ACCESS_TOKEN="..." \\
+        AIRTABLE_API_KEY="..." \\
         SLACK_WEBHOOK_URL="..."
+
+This file is a thin deploy wrapper: it builds the Modal image, mounts
+scripts/ + clients/, wires the secret, and exposes POST /webhook (plus a
+GET /health helper). Launcher logic lives in the rest of scripts/.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import modal
 
-# ─── Modal App & Image ───────────────────────────────────────────────────────
+# ─── Paths ────────────────────────────────────────────────────────────────────
+
+# scripts/modal_webhook.py → repo root is parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+CLIENTS_DIR = REPO_ROOT / "clients"
+
+
+def _build_clients_mount() -> Path:
+    """Stage only launcher-relevant client files under /tmp and return the path.
+
+    Only ships clients that have a launcher config (fb_ads_config.json).
+    Skips _example and any client without launcher setup.
+
+    Runs only during local `modal deploy`. On the Modal runtime container,
+    CLIENTS_DIR does not exist and we return a placeholder.
+    """
+    import shutil
+
+    stage = Path("/tmp/fb_ads_launcher_mount/clients")
+
+    # Skip during remote execution — the container has no local source tree
+    if not CLIENTS_DIR.exists():
+        return stage
+
+    if stage.exists():
+        shutil.rmtree(stage)
+    stage.mkdir(parents=True)
+
+    for client_dir in sorted(CLIENTS_DIR.iterdir()):
+        if not client_dir.is_dir() or client_dir.name.startswith("_"):
+            continue
+
+        # Only stage clients that have a launcher config
+        cfg_src = client_dir / "fb_ads_config.json"
+        if not cfg_src.exists():
+            continue
+
+        prefs_src = client_dir / "launch_preferences.yml"
+        creds_src = client_dir / "credentials"
+
+        dst = stage / client_dir.name
+        dst.mkdir(parents=True)
+        shutil.copy2(cfg_src, dst / "fb_ads_config.json")
+        if prefs_src.exists():
+            shutil.copy2(prefs_src, dst / "launch_preferences.yml")
+        if creds_src.exists():
+            shutil.copytree(creds_src, dst / "credentials", dirs_exist_ok=True)
+
+    return stage
+
+
+CLIENTS_MOUNT = _build_clients_mount()
+
+
+# ─── Modal App & Image ────────────────────────────────────────────────────────
 
 app = modal.App("fb-ads-launcher")
 
-LAUNCHER_VERSION = "2026-03-13-v8"
+LAUNCHER_VERSION = "2026-05-05-fbal"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install("requests", "python-dotenv", "fastapi")
+    .pip_install("requests", "python-dotenv", "fastapi", "pyyaml")
     .env({"LAUNCHER_VERSION": LAUNCHER_VERSION})
-    .add_local_dir(
-        "/Users/luisfersang/Documents/Rooster's AI Projects/FbAdsLauncher/scripts",
-        remote_path="/app/scripts",
-    )
-    .add_local_dir(
-        "/Users/luisfersang/Documents/Rooster's AI Projects/FbAdsLauncher/clients",
-        remote_path="/app/clients",
-    )
+    .add_local_dir(str(SCRIPTS_DIR), remote_path="/app/scripts")
+    .add_local_dir(str(CLIENTS_MOUNT), remote_path="/app/clients")
 )
 
 secrets = [modal.Secret.from_name("fb-ads-launcher-env")]
 
 
-# ─── Webhook Endpoint ────────────────────────────────────────────────────────
+def _init_runtime() -> None:
+    """Wire the Modal mount into the launcher scripts."""
+    if "/app/scripts" not in sys.path:
+        sys.path.insert(0, "/app/scripts")
+    # config_loader honours FB_ADS_CLIENTS_DIR — point it at the mount
+    os.environ.setdefault("FB_ADS_CLIENTS_DIR", "/app/clients")
+
+
+# ─── Webhook Endpoint ─────────────────────────────────────────────────────────
 
 @app.function(image=image, secrets=secrets, timeout=600)
 @modal.fastapi_endpoint(method="POST")
 def webhook(body: dict):
-    """Receive Airtable automation webhook when Ad Set status = 'Ready to Launch'.
+    """POST /webhook — Airtable automation entrypoint.
 
-    Expected payload from Airtable automation:
+    Expected payload:
         {"record_id": "recXXXXXX", "client_slug": "ts_twelve_south"}
     """
 
     record_id = body.get("record_id", "")
     client_slug = body.get("client_slug", "")
 
-    print(f"Webhook received: record_id={record_id}, client_slug={client_slug} [version={LAUNCHER_VERSION}]")
+    print(
+        f"Webhook received: record_id={record_id}, client_slug={client_slug} "
+        f"[version={LAUNCHER_VERSION}]"
+    )
 
     if not record_id:
         return {"status": "error", "reason": "no record_id in payload"}
-
     if not client_slug:
         return {"status": "error", "reason": "no client_slug in payload"}
 
-    # Set up paths for the scripts
-    sys.path.insert(0, "/app/scripts")
-
-    # Patch config_loader to look at /app/clients instead of local workspace
-    os.environ.setdefault("FB_ADS_CLIENTS_DIR", "/app/clients")
+    _init_runtime()
 
     try:
         from error_agent import run_with_self_healing
+
         summary = run_with_self_healing(client_slug, record_id, dry_run=False)
 
         return {
@@ -89,56 +147,55 @@ def webhook(body: dict):
             "ads_created": len(summary.get("ad_results", [])),
         }
 
-    except Exception as e:
+    except Exception as exc:
         import traceback
-        traceback.print_exc()
-        print(f"ERROR (after self-healing attempts): {e}")
 
-        # error_agent already sends detailed Slack notifications,
-        # but send a final fallback notification just in case
+        traceback.print_exc()
+        print(f"ERROR (after self-healing attempts): {exc}")
+
         slack_url = os.environ.get("SLACK_WEBHOOK_URL", "")
         if slack_url:
             try:
                 from notifier import notify_launch_error
+
                 notify_launch_error(
                     slack_url,
                     client_slug=client_slug,
-                    error=f"[v{LAUNCHER_VERSION}] {e}",
+                    error=f"[v{LAUNCHER_VERSION}] {exc}",
                     record_id=record_id,
                 )
             except Exception:
                 print("Warning: Slack error notification failed")
 
-        return {"status": "error", "reason": str(e)}
+        return {"status": "error", "reason": str(exc)}
 
 
-# ─── Health Check Endpoint ───────────────────────────────────────────────────
+# ─── Health Check Endpoint ────────────────────────────────────────────────────
 
 @app.function(image=image, secrets=secrets, timeout=120)
 @modal.fastapi_endpoint(method="GET")
 def health(client_slug: str = ""):
-    """Run pre-flight checks for one or all clients.
+    """GET /health[?client_slug=...] — run pre-flight checks."""
 
-    GET /health              → check all clients
-    GET /health?client_slug=ts_twelve_south → check one client
-    """
-    sys.path.insert(0, "/app/scripts")
-    os.environ.setdefault("FB_ADS_CLIENTS_DIR", "/app/clients")
+    _init_runtime()
 
     from config_loader import load_all, validate_config
     from preflight import resolve_instagram, run_preflight
 
-    from pathlib import Path
     clients_dir = Path(os.environ.get("FB_ADS_CLIENTS_DIR", "/app/clients"))
 
-    # Determine which clients to check
     if client_slug:
         slugs = [client_slug]
     else:
-        slugs = sorted([
-            d.name for d in clients_dir.iterdir()
-            if d.is_dir() and not d.name.startswith("_") and (d / "fb_ads_config.json").exists()
-        ])
+        slugs = sorted(
+            [
+                d.name
+                for d in clients_dir.iterdir()
+                if d.is_dir()
+                and not d.name.startswith("_")
+                and (d / "fb_ads_config.json").exists()
+            ]
+        )
 
     results = {}
     for slug in slugs:
@@ -155,8 +212,8 @@ def health(client_slug: str = ""):
                 results[slug] = {"status": "unhealthy", "errors": preflight_errors}
             else:
                 results[slug] = {"status": "healthy"}
-        except Exception as e:
-            results[slug] = {"status": "error", "errors": [str(e)]}
+        except Exception as exc:
+            results[slug] = {"status": "error", "errors": [str(exc)]}
 
     healthy = sum(1 for r in results.values() if r["status"] == "healthy")
     total = len(results)
@@ -168,36 +225,10 @@ def health(client_slug: str = ""):
     }
 
 
-# ─── Local Entrypoint (for testing) ──────────────────────────────────────────
+# ─── Local Entrypoint (for testing) ───────────────────────────────────────────
 
 @app.local_entrypoint()
 def main():
-    """Test the webhook endpoint locally: modal run agents/fb-ads-launcher/scripts/modal_webhook.py"""
+    """modal run scripts/modal_webhook.py"""
     print("Webhook endpoint deployed. URL will be shown in Modal dashboard.")
-    print("To test, use: curl -X POST <url> -H 'Content-Type: application/json' -d '{...}'")
-
-
-# ─── Secret setup (run these once before deploying) ──────────────────────────
-#
-# modal secret create fb-ads-launcher-env \
-#     FB_ACCESS_TOKEN="EAAakoZAaaKCABQ..." \
-#     AIRTABLE_API_KEY="patXXXXX..." \
-#     SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
-#
-# If secrets already exist and need updating:
-#     modal secret create fb-ads-launcher-env --force \
-#         FB_ACCESS_TOKEN="..." AIRTABLE_API_KEY="..." SLACK_WEBHOOK_URL="..."
-#
-# Note: Airtable base/table IDs are per-client in fb_ads_config.json,
-# not in Modal secrets. They're loaded from the /app/clients mount.
-#
-# ─── Deploy ──────────────────────────────────────────────────────────────────
-#
-#     modal deploy agents/fb-ads-launcher/scripts/modal_webhook.py
-#
-# After deploying, the webhook URL will be:
-#     https://<your-modal-username>--fb-ads-launcher-webhook.modal.run
-#
-# Configure each client's Airtable base automation to POST to this URL with:
-#     {"record_id": "{{record_id}}", "client_slug": "<client_slug>"}
-#
+    print("Test: curl -X POST <url> -H 'Content-Type: application/json' -d '{...}'")

@@ -12,16 +12,16 @@ Updates these fields in the Ad Sets table:
 
 Usage:
     # Single client
-    python3 agents/fb-ads-launcher/scripts/sync_meta_names.py ts_twelve_south
+    python3 scripts/sync_meta_names.py ts_twelve_south
 
     # Preview without making changes
-    python3 agents/fb-ads-launcher/scripts/sync_meta_names.py ts_twelve_south --dry-run
+    python3 scripts/sync_meta_names.py ts_twelve_south --dry-run
 
     # Sync all clients that have airtable_base_id configured
-    python3 agents/fb-ads-launcher/scripts/sync_meta_names.py --all
+    python3 scripts/sync_meta_names.py --all
 
     # Dry-run all clients
-    python3 agents/fb-ads-launcher/scripts/sync_meta_names.py --all --dry-run
+    python3 scripts/sync_meta_names.py --all --dry-run
 """
 
 import argparse
@@ -199,7 +199,8 @@ def update_field_choices(airtable_api_key: str, base_id: str, table_id: str,
 
 def find_all_clients() -> list[str]:
     """Find all client slugs that have airtable_base_id in fb_ads_config.json."""
-    workspace_root = SCRIPTS_DIR.resolve().parent
+    # SCRIPTS_DIR = scripts/; repo root is parents[0]
+    workspace_root = SCRIPTS_DIR.resolve().parents[0]
     clients_dir = workspace_root / "clients"
     pattern = str(clients_dir / "*" / "fb_ads_config.json")
 
